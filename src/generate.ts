@@ -1,63 +1,139 @@
-/**
- * Generator entrypoint. Read a toolkit catalog, infer its dependencies, write a graph.
- *
- * How we run it:
- *   - The path to a toolkit's catalog JSON is passed as a CLI ARGUMENT, e.g.
- *     `node --import tsx src/generate.ts path/to/catalog.json`. We append it as the last
- *     argument, so reading the final argv entry works whatever else your command carries.
- *   - Write your graph to `dependency_graph.json` in the working directory.
- *   - For LLM access, the OpenAI SDK reads OPENAI_API_KEY / OPENAI_BASE_URL from the
- *     environment (set from your assessment page's AI credentials; the same are provided
- *     when we run your generator). Use an OpenRouter model id such as `openai/gpt-4o`.
- *
- * This is a SKELETON. Replace the inference in generate() with your own approach. Do not
- * hardcode a toolkit's relations: your node ids must be slugs from the catalog you are
- * handed, and your output must change when the input changes.
- */
+import OpenAI from "openai";
 import { readFileSync, writeFileSync } from "fs";
+import { fileURLToPath } from "url";
 
-type Tool = Record<string, any>;
-interface Node {
+export type Tool = Record<string, any>;
+
+export interface Node {
   id: string;
   service?: string;
 }
-interface Edge {
+
+export interface Edge {
   from: string;
   to: string;
   label?: string;
 }
-interface Graph {
+
+export interface Graph {
   nodes: Node[];
   edges: Edge[];
 }
 
-// The catalog path is the last CLI argument (we append it after your run command).
+export interface ToolMetadata {
+  slug: string;
+  description: string;
+  requiredInputs: string[];
+  inputProperties: Record<string, { type: string; description?: string }>;
+  outputProperties: Record<string, { type: string; description?: string }>;
+}
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+  baseURL: process.env.OPENAI_BASE_URL,
+});
+
+export async function askLLM(prompt: string) {
+  const response = await openai.chat.completions.create({
+    model: "openai/gpt-4o",
+    messages: [{ role: "user", content: prompt }],
+    response_format: { type: "json_object" },
+  });
+  return JSON.parse(response.choices[0].message.content || "{}");
+}
+
+// The catalog path is the last CLI argument
 const CATALOG_PATH = process.argv.length > 2 ? process.argv[process.argv.length - 1] : undefined;
 const OUT_PATH = "dependency_graph.json";
 
-function loadCatalog(): Tool[] {
-  if (!CATALOG_PATH) {
+export function loadCatalog(path?: string): Tool[] {
+  const targetPath = path || CATALOG_PATH;
+  if (!targetPath) {
     throw new Error("pass the toolkit catalog path as the first argument");
   }
-  const data = JSON.parse(readFileSync(CATALOG_PATH, "utf-8"));
-  // getRawComposioTools returns a list of tools (or { tools: [...] }).
+  const data = JSON.parse(readFileSync(targetPath, "utf-8"));
   return Array.isArray(data) ? data : (data.tools ?? data.items ?? []);
 }
 
-function slugOf(tool: Tool): string | undefined {
+export function slugOf(tool: Tool): string | undefined {
   return tool.slug ?? tool.name ?? tool.function?.name;
 }
 
-/**
- * TODO: your inference goes here.
- *
- * The baseline below emits every tool as a node and no edges. It passes the
- * "nodes are real slugs" check but scores ~0 on correctness (no dependencies) and
- * will fail the has-edges gate. Replace it: for each tool's required inputs, infer
- * which other tools produce a matching output id/field, and emit those edges.
- * Runtime LLM inference is encouraged. Keep node ids sourced from the catalog you
- * were given.
- */
+export function resolveSchemaProperties(
+  schema: any,
+  defs: Record<string, any>,
+  visited: Set<string> = new Set(),
+  result: Record<string, { type: string; description?: string }> = {}
+): Record<string, { type: string; description?: string }> {
+  if (!schema) return result;
+
+  if (schema.$ref) {
+    const refName = schema.$ref.replace("#/$defs/", "");
+    if (visited.has(refName)) return result;
+    visited.add(refName);
+    const resolvedSchema = defs[refName];
+    if (resolvedSchema) {
+      resolveSchemaProperties(resolvedSchema, defs, visited, result);
+    }
+    visited.delete(refName);
+    return result;
+  }
+
+  if (schema.type === "object" && schema.properties) {
+    for (const [key, propSchema] of Object.entries(schema.properties)) {
+      const prop = propSchema as any;
+      if (prop.type && prop.type !== "object" && prop.type !== "array") {
+        result[key] = {
+          type: prop.type,
+          description: prop.description,
+        };
+      }
+      resolveSchemaProperties(prop, defs, visited, result);
+    }
+  } else if (schema.type === "array" && schema.items) {
+    resolveSchemaProperties(schema.items, defs, visited, result);
+  }
+
+  return result;
+}
+
+
+
+export function parseTool(tool: Tool): ToolMetadata {
+  const slug = slugOf(tool) || "";
+  const description = tool.description || "";
+
+  const inputSchema = tool.inputParameters || {};
+  const requiredInputs = inputSchema.required || [];
+  const inputProperties: Record<string, { type: string; description?: string }> = {};
+
+  if (inputSchema.properties) {
+    for (const [key, val] of Object.entries(inputSchema.properties)) {
+      const prop = val as any;
+      inputProperties[key] = {
+        type: prop.type || "string",
+        description: prop.description,
+      };
+    }
+  }
+
+  const outputSchema = tool.outputParameters || {};
+  const defs = outputSchema.$defs || {};
+  const outputProperties = resolveSchemaProperties(outputSchema, defs);
+
+  return {
+    slug,
+    description,
+    requiredInputs,
+    inputProperties,
+    outputProperties,
+  };
+}
+
+export function parseToolCatalog(tools: Tool[]): ToolMetadata[] {
+  return tools.map(parseTool);
+}
+
 async function generate(tools: Tool[]): Promise<Graph> {
   const nodes: Node[] = tools
     .map(slugOf)
@@ -68,6 +144,9 @@ async function generate(tools: Tool[]): Promise<Graph> {
 }
 
 async function main() {
+  if (!CATALOG_PATH) {
+    return;
+  }
   const graph = await generate(loadCatalog());
   writeFileSync(OUT_PATH, JSON.stringify(graph, null, 2), "utf-8");
   console.error(
@@ -75,7 +154,15 @@ async function main() {
   );
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+const isMain = process.argv[1] && (
+  process.argv[1] === fileURLToPath(import.meta.url) ||
+  process.argv[1].endsWith("generate.ts") ||
+  process.argv[1].endsWith("generate")
+);
+
+if (isMain) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}

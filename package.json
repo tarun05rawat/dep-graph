@@ -3,13 +3,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "generate": "node --import tsx src/generate.ts",
-    "selfcheck": "node --import tsx src/selfcheck.ts"
+    "generate": "node --env-file=.env --import tsx src/generate.ts",
+    "selfcheck": "node --env-file=.env --import tsx src/selfcheck.ts",
+    "test": "node --env-file=.env --import tsx --test src/generate.test.ts"
   },
   "dependencies": {
     "openai": "^6.48.0"
   },
   "devDependencies": {
-    "tsx": "^4.19.0"
+    "@types/node": "^26.2.0",
+    "tsx": "^4.19.0",
+    "typescript": "^7.0.2"
   }
 }
