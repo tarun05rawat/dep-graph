@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert";
-import { parseTool, Tool, isStaticParameter, inferHeuristicEdges, ToolMetadata, getToolDomain } from "./generate.js";
+import { parseTool, Tool, isStaticParameter, inferHeuristicEdges, ToolMetadata, getToolDomain, refineEdgesWithLLM, llmConfig } from "./generate.js";
 
 describe("Tool Catalog Parser", () => {
   test("extracts slug, description, and required parameters", () => {
@@ -144,5 +144,53 @@ describe("Tool Catalog Parser", () => {
     assert.strictEqual(getToolDomain("GITHUB_CREATE_A_PROJECT_CARD"), "Projects");
     assert.strictEqual(getToolDomain("GITHUB_DISPATCH_REPOSITORY_WORKFLOW"), "Actions");
     assert.strictEqual(getToolDomain("GITHUB_SOME_GENERIC_OPERATION"), "General");
+  });
+
+  test("refines edges using LLM configuration mapping", async () => {
+    const originalAsk = llmConfig.askLLM;
+    process.env.OPENAI_API_KEY = "test-key";
+
+    llmConfig.askLLM = async () => {
+      return {
+        issue_number: ["GITHUB_CREATE_AN_ISSUE"]
+      };
+    };
+
+    const mockTools: ToolMetadata[] = [
+      {
+        slug: "GITHUB_CREATE_AN_ISSUE",
+        description: "Create an issue",
+        requiredInputs: [],
+        inputProperties: {},
+        outputProperties: { number: { type: "integer" } }
+      },
+      {
+        slug: "GITHUB_LIST_REPOSITORY_ISSUES",
+        description: "List issues",
+        requiredInputs: [],
+        inputProperties: {},
+        outputProperties: { number: { type: "integer" } }
+      },
+      {
+        slug: "GITHUB_CREATE_AN_ISSUE_COMMENT",
+        description: "Comment on issue",
+        requiredInputs: ["issue_number"],
+        inputProperties: {},
+        outputProperties: {}
+      }
+    ];
+
+    const inputEdges = [
+      { from: "GITHUB_CREATE_AN_ISSUE", to: "GITHUB_CREATE_AN_ISSUE_COMMENT", label: "issue_number" },
+      { from: "GITHUB_LIST_REPOSITORY_ISSUES", to: "GITHUB_CREATE_AN_ISSUE_COMMENT", label: "issue_number" }
+    ];
+
+    const refined = await refineEdgesWithLLM(mockTools, inputEdges);
+
+    assert.strictEqual(refined.length, 1);
+    assert.strictEqual(refined[0].from, "GITHUB_CREATE_AN_ISSUE");
+
+    llmConfig.askLLM = originalAsk;
+    delete process.env.OPENAI_API_KEY;
   });
 });

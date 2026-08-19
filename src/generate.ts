@@ -33,14 +33,16 @@ const openai = new OpenAI({
   baseURL: process.env.OPENAI_BASE_URL,
 });
 
-export async function askLLM(prompt: string) {
-  const response = await openai.chat.completions.create({
-    model: "openai/gpt-4o",
-    messages: [{ role: "user", content: prompt }],
-    response_format: { type: "json_object" },
-  });
-  return JSON.parse(response.choices[0].message.content || "{}");
-}
+export const llmConfig = {
+  askLLM: async (prompt: string) => {
+    const response = await openai.chat.completions.create({
+      model: "openai/gpt-4o",
+      messages: [{ role: "user", content: prompt }],
+      response_format: { type: "json_object" },
+    });
+    return JSON.parse(response.choices[0].message.content || "{}");
+  }
+};
 
 // The catalog path is the last CLI argument
 const CATALOG_PATH = process.argv.length > 2 ? process.argv[process.argv.length - 1] : undefined;
@@ -109,6 +111,31 @@ export const STATIC_PARAMETERS = new Set([
   "sort",
   "direction",
   "state",
+  "username",
+  "branch",
+  "email",
+  "title",
+  "body",
+  "name",
+  "description",
+  "path",
+  "ref",
+  "message",
+  "content",
+  "url",
+  "id",
+  "number",
+  "base",
+  "head",
+  "tag_name",
+  "tag",
+  "type",
+  "login",
+  "org",
+  "key",
+  "value",
+  "visibility",
+  "package_type",
 ]);
 
 export function isStaticParameter(name: string): boolean {
@@ -161,10 +188,15 @@ export function getToolDomain(slug: string): string {
   return "General";
 }
 
+export const PRODUCER_KEYWORDS = ["GET", "LIST", "CREATE", "START", "QUEUE", "SEARCH", "FIND"];
+export const SUB_ENTITIES = ["COMMENT", "EVENT", "REACTION", "REVIEW", "ALERT", "COMMIT", "FILE"];
+
 export function inferHeuristicEdges(tools: ToolMetadata[]): Edge[] {
   const edges: Edge[] = [];
 
   for (const consumer of tools) {
+    const consumerDomain = getToolDomain(consumer.slug);
+
     for (const requiredInput of consumer.requiredInputs) {
       if (isStaticParameter(requiredInput)) {
         continue;
@@ -175,11 +207,27 @@ export function inferHeuristicEdges(tools: ToolMetadata[]): Edge[] {
           continue;
         }
 
+        // Constraint 1: Must belong to the same domain
+        const producerDomain = getToolDomain(producer.slug);
+        if (producerDomain !== consumerDomain) {
+          continue;
+        }
+
+        // Constraint 2: Producer must be a source/getter/creator
+        const prodUpper = producer.slug.toUpperCase();
+        const isSource = PRODUCER_KEYWORDS.some(kw => prodUpper.includes(kw));
+        if (!isSource) {
+          continue;
+        }
+
         // Rule 1: Exact case-insensitive match after stripping underscores
         const normalizedInput = requiredInput.toLowerCase().replace(/_/g, "");
         
         let matchedLabel: string | null = null;
         for (const outputName of Object.keys(producer.outputProperties)) {
+          if (isStaticParameter(outputName)) {
+            continue;
+          }
           const normalizedOutput = outputName.toLowerCase().replace(/_/g, "");
           if (normalizedInput === normalizedOutput) {
             matchedLabel = requiredInput;
@@ -192,12 +240,27 @@ export function inferHeuristicEdges(tools: ToolMetadata[]): Edge[] {
           const isNumOrId = requiredInput.endsWith("_number") || requiredInput.endsWith("_id");
           if (isNumOrId) {
             const entityKeyword = requiredInput.split("_")[0].toUpperCase();
-            const hasGenericOutput = producer.outputProperties.number || producer.outputProperties.id;
-            const slugUpper = producer.slug.toUpperCase();
-            const keywordMatches = slugUpper.includes(entityKeyword) || 
-                                   (entityKeyword === "PULL" && slugUpper.includes("PULL_REQUEST"));
+            
+            let hasGenericOutput = false;
+            if (requiredInput.endsWith("_number")) {
+              hasGenericOutput = !!producer.outputProperties.number;
+            } else if (requiredInput.endsWith("_id")) {
+              hasGenericOutput = !!(producer.outputProperties.id || producer.outputProperties.node_id);
+            }
 
-            if (hasGenericOutput && keywordMatches) {
+            // Constraint 3: Strict sub-entity check (e.g. comment tools don't produce issue_number)
+            let subEntityConflict = false;
+            for (const sub of SUB_ENTITIES) {
+              if (prodUpper.includes(sub) && !requiredInput.toUpperCase().includes(sub)) {
+                subEntityConflict = true;
+                break;
+              }
+            }
+
+            const keywordMatches = prodUpper.includes(entityKeyword) || 
+                                   (entityKeyword === "PULL" && prodUpper.includes("PULL_REQUEST"));
+
+            if (hasGenericOutput && keywordMatches && !subEntityConflict) {
               matchedLabel = requiredInput;
             }
           }
@@ -217,10 +280,79 @@ export function inferHeuristicEdges(tools: ToolMetadata[]): Edge[] {
   return edges;
 }
 
+export async function refineEdgesWithLLM(tools: ToolMetadata[], edges: Edge[]): Promise<Edge[]> {
+  if (!process.env.OPENAI_API_KEY) {
+    console.warn("OPENAI_API_KEY is not set. Skipping LLM refinement and returning heuristic edges.");
+    return edges;
+  }
+
+  const requiredInputs = new Set<string>();
+  for (const t of tools) {
+    for (const input of t.requiredInputs) {
+      if (!isStaticParameter(input)) {
+        requiredInputs.add(input);
+      }
+    }
+  }
+
+  if (requiredInputs.size === 0) {
+    return edges;
+  }
+
+  const candidateProducers = tools.filter(t => {
+    const isSource = PRODUCER_KEYWORDS.some(kw => t.slug.toUpperCase().includes(kw));
+    const hasOutputs = Object.keys(t.outputProperties).length > 0;
+    return isSource && hasOutputs;
+  });
+
+  const producerSummaries = candidateProducers.map(t => {
+    const outputsStr = Object.keys(t.outputProperties).join(", ");
+    return `- ${t.slug}: ${t.description} (Outputs: [${outputsStr}])`;
+  }).join("\n");
+
+  const prompt = `You are building a tool dependency graph.
+The toolkit has the following required dynamic input parameters that must be resolved at runtime:
+[${Array.from(requiredInputs).join(", ")}]
+
+Below is a list of candidate producer tools, their descriptions, and the properties they output:
+${producerSummaries}
+
+For each required parameter, identify the specific tools (from the list above) that are the correct producers/sources for it.
+A producer/source is a tool that creates, retrieves, lists, or searches the corresponding entity. 
+Avoid matching tools that modify, delete, or perform auxiliary actions on the entity (e.g., for "issue_number", do NOT match a comment-creation tool or event-listing tool, only match issue-creation or issue-fetching/listing tools).
+
+Return a JSON object mapping each required parameter to an array of valid producer slugs. Output ONLY raw JSON matching this format:
+{
+  "parameter_name": ["PRODUCER_SLUG_1", "PRODUCER_SLUG_2"]
+}
+`;
+
+  try {
+    const mapping = await llmConfig.askLLM(prompt);
+    
+    const refinedEdges: Edge[] = [];
+    for (const edge of edges) {
+      const allowedProducers = mapping[edge.label || ""];
+      if (allowedProducers && Array.isArray(allowedProducers)) {
+        if (allowedProducers.includes(edge.from)) {
+          refinedEdges.push(edge);
+        }
+      } else {
+        refinedEdges.push(edge);
+      }
+    }
+    return refinedEdges;
+  } catch (error) {
+    console.error("LLM Refinement failed, falling back to heuristic edges:", error);
+    return edges;
+  }
+}
+
 async function generate(tools: Tool[]): Promise<Graph> {
   const parsedTools = parseToolCatalog(tools);
   const nodes: Node[] = parsedTools.map(t => ({ id: t.slug }));
-  const edges: Edge[] = inferHeuristicEdges(parsedTools);
+  const heuristicEdges = inferHeuristicEdges(parsedTools);
+  const edges = await refineEdgesWithLLM(parsedTools, heuristicEdges);
   return { nodes, edges };
 }
 
