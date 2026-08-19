@@ -516,9 +516,27 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
             background: rgba(255, 255, 255, 0.2);
             border-radius: 3px;
         }
+        #loading {
+            position: fixed;
+            inset: 0;
+            z-index: 200;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #0b0f19;
+            color: #d1d5db;
+            font-size: 14px;
+            letter-spacing: 0.02em;
+            transition: opacity 250ms ease;
+        }
+        #loading.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
+    <div id="loading">Arranging dependency graph...</div>
     <div id="header">
         <h1>Tool Dependency Graph</h1>
         <p>Interactive visualization of API tool dependencies</p>
@@ -609,23 +627,80 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
             id: index,
             from: e.from,
             to: e.to,
-            label: e.label,
+            dependencyLabel: e.label,
             arrows: 'to',
-            color: { color: '#4b5563', highlight: '#3b82f6' },
-            font: { color: '#9ca3af', size: 10, align: 'top' },
-            smooth: { type: 'dynamic' }
+            color: { color: 'rgba(75, 85, 99, 0.28)', highlight: '#3b82f6' },
+            width: 0.7,
+            hoverWidth: 1.5,
+            selectionWidth: 2,
+            title: e.label,
+            smooth: { type: 'continuous', roundness: 0.15 }
         }));
 
         const container = document.getElementById('network');
-        const data = { nodes: new vis.DataSet(visNodes), edges: new vis.DataSet(visEdges) };
+        const nodeData = new vis.DataSet(visNodes);
+        const edgeData = new vis.DataSet(visEdges);
+        const data = { nodes: nodeData, edges: edgeData };
         const options = {
             physics: {
-                stabilization: { iterations: 150 },
-                barnesHut: { gravitationalConstant: -8000, springLength: 200 }
+                stabilization: { enabled: true, iterations: 400, updateInterval: 50 },
+                barnesHut: {
+                    gravitationalConstant: -12000,
+                    centralGravity: 0.15,
+                    springLength: 240,
+                    springConstant: 0.02,
+                    damping: 0.45,
+                    avoidOverlap: 0.25
+                }
             },
-            interaction: { hover: true, tooltipDelay: 200 }
+            interaction: {
+                hover: true,
+                tooltipDelay: 200,
+                dragNodes: true,
+                dragView: true,
+                zoomView: true,
+                hideEdgesOnDrag: true
+            }
         };
         const network = new vis.Network(container, data, options);
+
+        let layoutReady = false;
+
+        function finishLayout() {
+            if (layoutReady) return;
+            layoutReady = true;
+            network.setOptions({ physics: false });
+            network.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
+            const loading = document.getElementById('loading');
+            loading.classList.add('hidden');
+            setTimeout(() => loading.remove(), 300);
+        }
+
+        network.once('stabilizationIterationsDone', finishLayout);
+        setTimeout(finishLayout, 6000);
+
+        let labeledEdgeIds = [];
+
+        function showDependencyLabels(nodeId) {
+            if (labeledEdgeIds.length > 0) {
+                edgeData.update(labeledEdgeIds.map(id => ({ id, label: undefined })));
+            }
+            labeledEdgeIds = network.getConnectedEdges(nodeId);
+            edgeData.update(labeledEdgeIds.map(id => {
+                const edge = edgeData.get(id);
+                return {
+                    id,
+                    label: edge.dependencyLabel,
+                    font: { color: '#d1d5db', size: 10, align: 'top', strokeWidth: 3, strokeColor: '#0b0f19' }
+                };
+            }));
+        }
+
+        network.on('selectNode', params => showDependencyLabels(params.nodes[0]));
+        network.on('deselectNode', () => {
+            edgeData.update(labeledEdgeIds.map(id => ({ id, label: undefined })));
+            labeledEdgeIds = [];
+        });
 
         const searchInput = document.getElementById('search-input');
         const resultsList = document.getElementById('search-results');
@@ -674,6 +749,7 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
         function searchNode() {
             const query = searchInput.value.toUpperCase().trim();
             if (!query) return;
+            resultsList.style.display = 'none';
 
             const queryWords = query.split(/\\s+/).filter(Boolean);
             const exactQuery = queryWords.join('_');
@@ -684,6 +760,7 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
             );
             if (exactMatch) {
                 network.selectNodes([exactMatch.id]);
+                showDependencyLabels(exactMatch.id);
                 network.focus(exactMatch.id, {
                     scale: 1.2,
                     animation: {
@@ -707,6 +784,7 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
             if (currentSearchMatches.length > 0) {
                 const match = currentSearchMatches[currentSearchIndex];
                 network.selectNodes([match.id]);
+                showDependencyLabels(match.id);
                 network.focus(match.id, {
                     scale: 1.2,
                     animation: {
