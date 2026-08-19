@@ -453,8 +453,9 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
         <p>Interactive visualization of Composio tool dependencies</p>
         <p id="stats"></p>
         <div style="margin-top: 10px; display: flex; gap: 8px;">
-            <input type="text" id="search-input" placeholder="Search tool (e.g. issue)" style="background: rgba(31, 41, 55, 0.8); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 6px 12px; border-radius: 6px; font-size: 12px; width: 180px; outline: none;" />
+            <input type="text" id="search-input" list="tool-options" placeholder="Search tool (e.g. issue)" style="background: rgba(31, 41, 55, 0.8); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 6px 12px; border-radius: 6px; font-size: 12px; width: 180px; outline: none;" />
             <button onclick="searchNode()" style="background: #3b82f6; border: none; color: white; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 500;">Search</button>
+            <datalist id="tool-options"></datalist>
         </div>
     </div>
     <div id="network"></div>
@@ -527,14 +528,35 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
         };
         const network = new vis.Network(container, data, options);
 
+        const datalist = document.getElementById('tool-options');
+        nodes.forEach(n => {
+            const option = document.createElement('option');
+            option.value = n.id;
+            datalist.appendChild(option);
+        });
+
         let currentSearchQuery = "";
         let currentSearchMatches = [];
         let currentSearchIndex = 0;
 
         function searchNode() {
-            const query = document.getElementById('search-input').value.toUpperCase();
+            const query = document.getElementById('search-input').value.toUpperCase().trim();
             if (!query) return;
-            
+
+            const exactMatch = nodes.find(n => n.id.toUpperCase() === query);
+            if (exactMatch) {
+                network.selectNodes([exactMatch.id]);
+                network.focus(exactMatch.id, {
+                    scale: 1.2,
+                    animation: {
+                        duration: 1000,
+                        easingFunction: 'easeInOutQuad'
+                    }
+                });
+                document.getElementById('stats').innerText = \`Nodes: \${nodes.length} | Edges: \${edges.length} | Focused: \${exactMatch.id}\`;
+                return;
+            }
+
             if (query !== currentSearchQuery) {
                 currentSearchQuery = query;
                 currentSearchMatches = nodes.filter(n => n.id.toUpperCase().includes(query));
