@@ -516,27 +516,9 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
             background: rgba(255, 255, 255, 0.2);
             border-radius: 3px;
         }
-        #loading {
-            position: fixed;
-            inset: 0;
-            z-index: 200;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #0b0f19;
-            color: #d1d5db;
-            font-size: 14px;
-            letter-spacing: 0.02em;
-            transition: opacity 250ms ease;
-        }
-        #loading.hidden {
-            opacity: 0;
-            pointer-events: none;
-        }
     </style>
 </head>
 <body>
-    <div id="loading">Arranging dependency graph...</div>
     <div id="header">
         <h1>Tool Dependency Graph</h1>
         <p>Interactive visualization of API tool dependencies</p>
@@ -603,8 +585,26 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
             return "General";
         }
 
+        const connectedNodeIds = new Set(edges.flatMap(edge => [edge.from, edge.to]));
+        const isolatedNodes = nodes.filter(node => !connectedNodeIds.has(node.id));
+        const isolatedPositions = new Map();
+        const ringCount = 3;
+        const nodesPerRing = Math.ceil(isolatedNodes.length / ringCount);
+
+        isolatedNodes.forEach((node, index) => {
+            const ring = index % ringCount;
+            const positionInRing = Math.floor(index / ringCount);
+            const angle = (positionInRing / nodesPerRing) * Math.PI * 2 + ring * 0.08;
+            const radius = 3400 + ring * 650;
+            isolatedPositions.set(node.id, {
+                x: Math.cos(angle) * radius,
+                y: Math.sin(angle) * radius
+            });
+        });
+
         const visNodes = nodes.map(n => {
             const domain = getToolDomain(n.id);
+            const isolatedPosition = isolatedPositions.get(n.id);
             return {
                 id: n.id,
                 label: n.id.replace('GITHUB_', ''),
@@ -619,7 +619,12 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
                 },
                 font: { color: '#f3f4f6', size: 12 },
                 borderWidth: 2,
-                shape: 'box'
+                shape: 'box',
+                ...(isolatedPosition ? {
+                    x: isolatedPosition.x,
+                    y: isolatedPosition.y,
+                    physics: false
+                } : {})
             };
         });
 
@@ -643,7 +648,7 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
         const data = { nodes: nodeData, edges: edgeData };
         const options = {
             physics: {
-                stabilization: { enabled: true, iterations: 400, updateInterval: 50 },
+                stabilization: false,
                 barnesHut: {
                     gravitationalConstant: -12000,
                     centralGravity: 0.15,
@@ -659,7 +664,7 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
                 dragNodes: true,
                 dragView: true,
                 zoomView: true,
-                hideEdgesOnDrag: true
+                hideEdgesOnDrag: false
             }
         };
         const network = new vis.Network(container, data, options);
@@ -670,14 +675,12 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
             if (layoutReady) return;
             layoutReady = true;
             network.setOptions({ physics: false });
-            network.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
-            const loading = document.getElementById('loading');
-            loading.classList.add('hidden');
-            setTimeout(() => loading.remove(), 300);
+            network.redraw();
         }
 
-        network.once('stabilizationIterationsDone', finishLayout);
-        setTimeout(finishLayout, 6000);
+        network.fit({ animation: false });
+        network.once('stabilized', finishLayout);
+        setTimeout(finishLayout, 5000);
 
         let labeledEdgeIds = [];
 
