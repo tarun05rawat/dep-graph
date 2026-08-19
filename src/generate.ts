@@ -150,12 +150,66 @@ export function parseToolCatalog(tools: Tool[]): ToolMetadata[] {
   return tools.map(parseTool);
 }
 
-async function generate(tools: Tool[]): Promise<Graph> {
-  const nodes: Node[] = tools
-    .map(slugOf)
-    .filter((s): s is string => !!s)
-    .map((id) => ({ id }));
+export function inferHeuristicEdges(tools: ToolMetadata[]): Edge[] {
   const edges: Edge[] = [];
+
+  for (const consumer of tools) {
+    for (const requiredInput of consumer.requiredInputs) {
+      if (isStaticParameter(requiredInput)) {
+        continue;
+      }
+
+      for (const producer of tools) {
+        if (producer.slug === consumer.slug) {
+          continue;
+        }
+
+        // Rule 1: Exact case-insensitive match after stripping underscores
+        const normalizedInput = requiredInput.toLowerCase().replace(/_/g, "");
+        
+        let matchedLabel: string | null = null;
+        for (const outputName of Object.keys(producer.outputProperties)) {
+          const normalizedOutput = outputName.toLowerCase().replace(/_/g, "");
+          if (normalizedInput === normalizedOutput) {
+            matchedLabel = requiredInput;
+            break;
+          }
+        }
+
+        // Rule 2: Context-aware mapping (e.g. matching generic 'number'/'id' if domain matches)
+        if (!matchedLabel) {
+          const isNumOrId = requiredInput.endsWith("_number") || requiredInput.endsWith("_id");
+          if (isNumOrId) {
+            const entityKeyword = requiredInput.split("_")[0].toUpperCase();
+            const hasGenericOutput = producer.outputProperties.number || producer.outputProperties.id;
+            const slugUpper = producer.slug.toUpperCase();
+            const keywordMatches = slugUpper.includes(entityKeyword) || 
+                                   (entityKeyword === "PULL" && slugUpper.includes("PULL_REQUEST"));
+
+            if (hasGenericOutput && keywordMatches) {
+              matchedLabel = requiredInput;
+            }
+          }
+        }
+
+        if (matchedLabel) {
+          edges.push({
+            from: producer.slug,
+            to: consumer.slug,
+            label: requiredInput,
+          });
+        }
+      }
+    }
+  }
+
+  return edges;
+}
+
+async function generate(tools: Tool[]): Promise<Graph> {
+  const parsedTools = parseToolCatalog(tools);
+  const nodes: Node[] = parsedTools.map(t => ({ id: t.slug }));
+  const edges: Edge[] = inferHeuristicEdges(parsedTools);
   return { nodes, edges };
 }
 

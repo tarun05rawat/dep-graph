@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert";
-import { parseTool, Tool, isStaticParameter } from "./generate.js";
+import { parseTool, Tool, isStaticParameter, inferHeuristicEdges, ToolMetadata } from "./generate.js";
 
 describe("Tool Catalog Parser", () => {
   test("extracts slug, description, and required parameters", () => {
@@ -83,5 +83,56 @@ describe("Tool Catalog Parser", () => {
     assert.strictEqual(isStaticParameter("comment_id"), false);
     assert.strictEqual(isStaticParameter("migrationId"), false);
     assert.strictEqual(isStaticParameter("some_other_field"), false);
+  });
+
+  test("infers heuristic edges correctly", () => {
+    const mockTools: ToolMetadata[] = [
+      {
+        slug: "GITHUB_LIST_REPOSITORY_ISSUES",
+        description: "List issues",
+        requiredInputs: ["owner", "repo"],
+        inputProperties: {},
+        outputProperties: {
+          number: { type: "integer", description: "The issue number" }
+        }
+      },
+      {
+        slug: "GITHUB_CREATE_AN_ISSUE_COMMENT",
+        description: "Create issue comment",
+        requiredInputs: ["owner", "repo", "issue_number"],
+        inputProperties: {},
+        outputProperties: {
+          id: { type: "integer" }
+        }
+      },
+      {
+        slug: "GITHUB_ABORT_REPOSITORY_MIGRATION",
+        description: "Abort migration",
+        requiredInputs: ["migration_id"],
+        inputProperties: {},
+        outputProperties: {}
+      },
+      {
+        slug: "GITHUB_START_REPOSITORY_MIGRATION",
+        description: "Start migration",
+        requiredInputs: [],
+        inputProperties: {},
+        outputProperties: {
+          migrationId: { type: "string" }
+        }
+      }
+    ];
+
+    const edges = inferHeuristicEdges(mockTools);
+
+    const migrationEdge = edges.find(e => e.to === "GITHUB_ABORT_REPOSITORY_MIGRATION");
+    assert.ok(migrationEdge);
+    assert.strictEqual(migrationEdge.from, "GITHUB_START_REPOSITORY_MIGRATION");
+    assert.strictEqual(migrationEdge.label, "migration_id");
+
+    const issueEdge = edges.find(e => e.to === "GITHUB_CREATE_AN_ISSUE_COMMENT");
+    assert.ok(issueEdge);
+    assert.strictEqual(issueEdge.from, "GITHUB_LIST_REPOSITORY_ISSUES");
+    assert.strictEqual(issueEdge.label, "issue_number");
   });
 });
