@@ -142,14 +142,16 @@ The direction is always `producer -> consumer`. The label is the value supplied 
 
 ```text
 dep-graph/
+├── .github/workflows/ci.yml  # Automated type checking and tests
 ├── src/
 │   ├── generate.ts       # Parser, inference engine, LLM refinement, DAG logic, and visualizer
 │   ├── generate.test.ts  # Unit tests for core behavior
 │   └── selfcheck.ts      # End-to-end output and provenance checks
+├── .env.example          # Optional model-provider configuration
 ├── github_catalog.json   # Example GitHub tool catalog
-├── generator.json        # Build and execution contract
 ├── visualization.html    # Generated interactive graph
 ├── package.json
+├── tsconfig.json
 └── README.md
 ```
 
@@ -159,9 +161,9 @@ dep-graph/
 
 ### Prerequisites
 
-- Node.js 20 or newer
+- Node.js 20.19 or newer
 - npm
-- An OpenAI-compatible API key and base URL for LLM refinement
+- Optional: an OpenAI-compatible API key for semantic edge refinement
 
 ### Installation
 
@@ -171,11 +173,18 @@ cd dep-graph
 npm install
 ```
 
-Create a `.env` file in the repository root:
+ToolGraph runs in deterministic mode without AI credentials. To enable LLM refinement, copy the example environment file:
+
+```bash
+cp .env.example .env
+```
+
+Then configure the provider:
 
 ```env
 OPENAI_API_KEY=your_api_key
 OPENAI_BASE_URL=https://your-openai-compatible-endpoint.example/v1
+OPENAI_MODEL=gpt-4o
 ```
 
 If the provider uses OpenAI's default endpoint, `OPENAI_BASE_URL` can be omitted.
@@ -264,7 +273,6 @@ The graph can retain deterministic candidates when model refinement encounters a
 ## Roadmap
 
 - Add a hand-labeled evaluation set with edge precision, recall, and F1 metrics.
-- Lazy-load the model client so deterministic generation can run without AI credentials.
 - Add confidence scores and provenance metadata to every edge.
 - Rank competing producer tools by semantic fit and execution cost.
 - Support additional schema variants such as `oneOf`, `anyOf`, and deeply nested arrays.

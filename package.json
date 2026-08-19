@@ -1,13 +1,21 @@
 {
-  "name": "composio-dep-graph-generator",
+  "name": "toolgraph",
+  "version": "1.0.0",
+  "description": "Hybrid schema and LLM-based dependency graph generation for API tool catalogs.",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20.19"
+  },
   "scripts": {
-    "generate": "node --env-file=.env --import tsx src/generate.ts",
-    "selfcheck": "node --env-file=.env --import tsx src/selfcheck.ts",
-    "test": "node --env-file=.env --import tsx --test src/generate.test.ts"
+    "generate": "node --import dotenv/config --import tsx src/generate.ts",
+    "selfcheck": "node --import dotenv/config --import tsx src/selfcheck.ts",
+    "test": "node --import dotenv/config --import tsx --test src/generate.test.ts",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm test"
   },
   "dependencies": {
+    "dotenv": "^17.2.3",
     "openai": "^6.48.0"
   },
   "devDependencies": {

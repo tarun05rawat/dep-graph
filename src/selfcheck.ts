@@ -1,21 +1,19 @@
 /**
- * Local self-check. Runs your generator on the provided GitHub catalog and reports
- * shape + provenance metrics so you can iterate. Usage: `npm run selfcheck`.
+ * Runs ToolGraph against the included sample catalog and reports structural and
+ * provenance metrics. Usage: `npm run selfcheck`.
  */
 import { readFileSync, existsSync } from "fs";
 import { execFileSync } from "child_process";
 
-const CATALOG = "github_catalog.json"; // provided toolkit, ships with your package
-const OUT = "dependency_graph.json"; // what your generator writes
+const CATALOG = "github_catalog.json";
+const OUT = "dependency_graph.json";
 
 if (!existsSync(CATALOG)) {
-  console.error(
-    `missing ${CATALOG}. It ships with your assessment package; contact your recruiter if it is absent.`,
-  );
+  console.error(`Missing sample catalog: ${CATALOG}`);
   process.exit(1);
 }
 
-// Run the generator exactly like the grader does: the catalog path is the last arg.
+// Exercise the same CLI entry point used for normal graph generation.
 execFileSync("node", ["--import", "tsx", "src/generate.ts", CATALOG], {
   stdio: "inherit",
 });
@@ -49,9 +47,9 @@ console.log(
 
 if (provenance < 0.8) {
   console.error(
-    "WARNING: provenance < 0.8. Your node ids must be slugs from the catalog you were given.",
+    "WARNING: provenance < 0.8. Node IDs should originate from the source catalog.",
   );
 }
 if (edges.length === 0) {
-  console.error("WARNING: 0 edges. A graph with no dependencies fails the has-edges gate.");
+  console.error("WARNING: no dependency edges were generated.");
 }

@@ -28,15 +28,20 @@ export interface ToolMetadata {
   outputProperties: Record<string, { type: string; description?: string }>;
 }
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  baseURL: process.env.OPENAI_BASE_URL,
-});
-
 export const llmConfig = {
   askLLM: async (prompt: string) => {
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      throw new Error("OPENAI_API_KEY is required for LLM refinement");
+    }
+
+    const openai = new OpenAI({
+      apiKey,
+      baseURL: process.env.OPENAI_BASE_URL,
+    });
+
     const response = await openai.chat.completions.create({
-      model: "openai/gpt-4o",
+      model: process.env.OPENAI_MODEL || "gpt-4o",
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" },
     });
@@ -46,14 +51,14 @@ export const llmConfig = {
   }
 };
 
-// The catalog path is the last CLI argument
+// The catalog path is the final CLI argument.
 const CATALOG_PATH = process.argv.length > 2 ? process.argv[process.argv.length - 1] : undefined;
 const OUT_PATH = "dependency_graph.json";
 
 export function loadCatalog(path?: string): Tool[] {
   const targetPath = path || CATALOG_PATH;
   if (!targetPath) {
-    throw new Error("pass the toolkit catalog path as the first argument");
+    throw new Error("Provide a tool catalog path as the first argument.");
   }
   const data = JSON.parse(readFileSync(targetPath, "utf-8"));
   return Array.isArray(data) ? data : (data.tools ?? data.items ?? []);
@@ -372,7 +377,6 @@ export function detectAndRemoveCycles(nodes: Node[], edges: Edge[]): Edge[] {
       if (!visited.has(to)) {
         dfs(to);
       } else if (recStack.has(to)) {
-        console.warn(`[Cycle Detected] Breaking cycle: ${u} -> ${to} (label: ${edge.label})`);
         edgesToRemove.add(edge);
       }
     }
@@ -384,6 +388,10 @@ export function detectAndRemoveCycles(nodes: Node[], edges: Edge[]): Edge[] {
     if (!visited.has(n.id)) {
       dfs(n.id);
     }
+  }
+
+  if (edgesToRemove.size > 0) {
+    console.warn(`[Cycle Detection] Removed ${edgesToRemove.size} back edges to produce a DAG.`);
   }
 
   return edges.filter(e => !edgesToRemove.has(e));
@@ -490,7 +498,7 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
 <body>
     <div id="header">
         <h1>Tool Dependency Graph</h1>
-        <p>Interactive visualization of Composio tool dependencies</p>
+        <p>Interactive visualization of API tool dependencies</p>
         <p id="stats"></p>
         <div style="margin-top: 10px; display: flex; gap: 8px; position: relative;">
             <div style="position: relative;">
@@ -709,6 +717,8 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
 
 async function main() {
   if (!CATALOG_PATH) {
+    console.error("Usage: npm run generate -- path/to/tool_catalog.json");
+    process.exitCode = 1;
     return;
   }
   const graph = await generate(loadCatalog());
