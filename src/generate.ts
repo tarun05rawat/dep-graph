@@ -150,6 +150,17 @@ export function parseToolCatalog(tools: Tool[]): ToolMetadata[] {
   return tools.map(parseTool);
 }
 
+export function getToolDomain(slug: string): string {
+  const upper = slug.toUpperCase();
+  if (upper.includes("PROJECT")) return "Projects";
+  if (upper.includes("WORKFLOW") || upper.includes("ACTION") || upper.includes("RUN")) return "Actions";
+  if (upper.includes("ISSUE") || upper.includes("COMMENT")) return "Issues";
+  if (upper.includes("PULL") || upper.includes("PR") || upper.includes("MERGE")) return "PullRequests";
+  if (upper.includes("TEAM") || upper.includes("ORG") || upper.includes("MEMBER")) return "Organizations";
+  if (upper.includes("REPO") || upper.includes("REPOSITORY") || upper.includes("MIGRAT")) return "Repositories";
+  return "General";
+}
+
 export function inferHeuristicEdges(tools: ToolMetadata[]): Edge[] {
   const edges: Edge[] = [];
 

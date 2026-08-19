@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert";
-import { parseTool, Tool, isStaticParameter, inferHeuristicEdges, ToolMetadata } from "./generate.js";
+import { parseTool, Tool, isStaticParameter, inferHeuristicEdges, ToolMetadata, getToolDomain } from "./generate.js";
 
 describe("Tool Catalog Parser", () => {
   test("extracts slug, description, and required parameters", () => {
@@ -134,5 +134,15 @@ describe("Tool Catalog Parser", () => {
     assert.ok(issueEdge);
     assert.strictEqual(issueEdge.from, "GITHUB_LIST_REPOSITORY_ISSUES");
     assert.strictEqual(issueEdge.label, "issue_number");
+  });
+
+  test("categorizes tools into domains correctly", () => {
+    assert.strictEqual(getToolDomain("GITHUB_CREATE_AN_ISSUE_COMMENT"), "Issues");
+    assert.strictEqual(getToolDomain("GITHUB_MERGE_A_PULL_REQUEST"), "PullRequests");
+    assert.strictEqual(getToolDomain("GITHUB_START_REPOSITORY_MIGRATION"), "Repositories");
+    assert.strictEqual(getToolDomain("GITHUB_REMOVE_TEAM_MEMBERSHIP_FOR_A_USER"), "Organizations");
+    assert.strictEqual(getToolDomain("GITHUB_CREATE_A_PROJECT_CARD"), "Projects");
+    assert.strictEqual(getToolDomain("GITHUB_DISPATCH_REPOSITORY_WORKFLOW"), "Actions");
+    assert.strictEqual(getToolDomain("GITHUB_SOME_GENERIC_OPERATION"), "General");
   });
 });
