@@ -1,6 +1,6 @@
 # ToolGraph
 
-[Live visualization](https://tarun05rawat.github.io/dep-graph/) | [CI](https://github.com/tarun05rawat/dep-graph/actions)
+[CI](https://github.com/tarun05rawat/dep-graph/actions)
 
 ToolGraph generates an executable dependency graph from a catalog of API tools. It identifies which tools can produce the inputs required by other tools, creating a machine-readable map that an AI agent can use to plan multi-step actions.
 
@@ -146,7 +146,7 @@ The direction is always `producer -> consumer`. The label is the value supplied 
 
 ```text
 dep-graph/
-├── .github/workflows/        # CI and GitHub Pages deployment
+├── .github/workflows/        # Automated type checking and tests
 ├── evaluation/
 │   └── labeled_edges.json    # Balanced, manually labeled edge benchmark
 ├── src/
@@ -160,6 +160,7 @@ dep-graph/
 ├── visualization.html    # Generated interactive graph
 ├── package.json
 ├── tsconfig.json
+├── vercel.json           # Static visualization deployment settings
 └── README.md
 ```
 

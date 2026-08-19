@@ -9,6 +9,7 @@
   },
   "scripts": {
     "generate": "node --import dotenv/config --import tsx src/generate.ts",
+    "build:site": "npm run generate -- github_catalog.json && mkdir -p public && cp visualization.html public/index.html",
     "selfcheck": "node --import dotenv/config --import tsx src/selfcheck.ts",
     "test": "node --import dotenv/config --import tsx --test src/*.test.ts",
     "evaluate": "node --import dotenv/config --import tsx src/evaluate.ts",

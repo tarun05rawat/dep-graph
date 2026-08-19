@@ -3,5 +3,6 @@ node_modules/
 !.env.example
 selfcheck_graph.json
 dependency_graph.json
+public/
 coverage/
 *.log
