@@ -499,6 +499,32 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
             </div>
             <button onclick="searchNode()" style="background: #3b82f6; border: none; color: white; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 500;">Search</button>
         </div>
+        <div style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 12px;">
+            <p style="font-weight: 600; font-size: 11px; margin-bottom: 8px; color: #e5e7eb; text-align: left;">Domain Legend</p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 10px; text-align: left;">
+                <div style="display: flex; align-items: center; gap: 6px; color: #d1d5db;">
+                    <span style="display: inline-block; width: 8px; height: 8px; background: #f59e0b; border-radius: 2px;"></span> Issues
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; color: #d1d5db;">
+                    <span style="display: inline-block; width: 8px; height: 8px; background: #10b981; border-radius: 2px;"></span> PRs
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; color: #d1d5db;">
+                    <span style="display: inline-block; width: 8px; height: 8px; background: #3b82f6; border-radius: 2px;"></span> Repos
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; color: #d1d5db;">
+                    <span style="display: inline-block; width: 8px; height: 8px; background: #8b5cf6; border-radius: 2px;"></span> Orgs
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; color: #d1d5db;">
+                    <span style="display: inline-block; width: 8px; height: 8px; background: #ec4899; border-radius: 2px;"></span> Projects
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; color: #d1d5db;">
+                    <span style="display: inline-block; width: 8px; height: 8px; background: #ef4444; border-radius: 2px;"></span> Actions
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; color: #d1d5db; grid-column: span 2;">
+                    <span style="display: inline-block; width: 8px; height: 8px; background: #6b7280; border-radius: 2px;"></span> General
+                </div>
+            </div>
+        </div>
     </div>
     <div id="network"></div>
     <script type="text/javascript">
@@ -581,7 +607,12 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
                 return;
             }
 
-            const matches = nodes.filter(n => n.id.toUpperCase().includes(query));
+            const queryWords = query.split(/\\s+/).filter(Boolean);
+            const matches = nodes.filter(n => {
+                const idUpper = n.id.toUpperCase();
+                return queryWords.every(word => idUpper.includes(word));
+            });
+
             if (matches.length > 0) {
                 matches.slice(0, 8).forEach(match => {
                     const li = document.createElement('li');
@@ -613,7 +644,13 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
             const query = searchInput.value.toUpperCase().trim();
             if (!query) return;
 
-            const exactMatch = nodes.find(n => n.id.toUpperCase() === query);
+            const queryWords = query.split(/\\s+/).filter(Boolean);
+            const exactQuery = queryWords.join('_');
+            const exactMatch = nodes.find(n => 
+                n.id.toUpperCase() === query || 
+                n.id.toUpperCase() === exactQuery || 
+                n.id.toUpperCase().replace('GITHUB_', '') === exactQuery
+            );
             if (exactMatch) {
                 network.selectNodes([exactMatch.id]);
                 network.focus(exactMatch.id, {
@@ -629,7 +666,10 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
 
             if (query !== currentSearchQuery) {
                 currentSearchQuery = query;
-                currentSearchMatches = nodes.filter(n => n.id.toUpperCase().includes(query));
+                currentSearchMatches = nodes.filter(n => {
+                    const idUpper = n.id.toUpperCase();
+                    return queryWords.every(word => idUpper.includes(word));
+                });
                 currentSearchIndex = 0;
             }
             
