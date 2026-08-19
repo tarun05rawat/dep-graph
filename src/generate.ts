@@ -445,6 +445,46 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
             width: 100vw;
             height: 100vh;
         }
+        #search-results {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            width: 100%;
+            max-height: 200px;
+            overflow-y: auto;
+            background: rgba(17, 24, 39, 0.95);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            margin-top: 5px;
+            padding: 5px 0;
+            list-style: none;
+            z-index: 100;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+        #search-results li {
+            padding: 8px 12px;
+            font-size: 11px;
+            color: #d1d5db;
+            cursor: pointer;
+            text-align: left;
+            transition: background 0.15s, color 0.15s;
+        }
+        #search-results li:hover {
+            background: rgba(59, 130, 246, 0.8);
+            color: white;
+        }
+        #search-results::-webkit-scrollbar {
+            width: 6px;
+        }
+        #search-results::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+        }
+        #search-results::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
     </style>
 </head>
 <body>
@@ -452,10 +492,12 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
         <h1>Tool Dependency Graph</h1>
         <p>Interactive visualization of Composio tool dependencies</p>
         <p id="stats"></p>
-        <div style="margin-top: 10px; display: flex; gap: 8px;">
-            <input type="text" id="search-input" list="tool-options" placeholder="Search tool (e.g. issue)" style="background: rgba(31, 41, 55, 0.8); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 6px 12px; border-radius: 6px; font-size: 12px; width: 180px; outline: none;" />
+        <div style="margin-top: 10px; display: flex; gap: 8px; position: relative;">
+            <div style="position: relative;">
+                <input type="text" id="search-input" placeholder="Search tool (e.g. issue)" style="background: rgba(31, 41, 55, 0.8); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 6px 12px; border-radius: 6px; font-size: 12px; width: 180px; outline: none;" autocomplete="off" />
+                <ul id="search-results"></ul>
+            </div>
             <button onclick="searchNode()" style="background: #3b82f6; border: none; color: white; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 500;">Search</button>
-            <datalist id="tool-options"></datalist>
         </div>
     </div>
     <div id="network"></div>
@@ -528,11 +570,39 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
         };
         const network = new vis.Network(container, data, options);
 
-        const datalist = document.getElementById('tool-options');
-        nodes.forEach(n => {
-            const option = document.createElement('option');
-            option.value = n.id;
-            datalist.appendChild(option);
+        const searchInput = document.getElementById('search-input');
+        const resultsList = document.getElementById('search-results');
+
+        searchInput.addEventListener('input', () => {
+            const query = searchInput.value.toUpperCase().trim();
+            resultsList.innerHTML = '';
+            if (!query) {
+                resultsList.style.display = 'none';
+                return;
+            }
+
+            const matches = nodes.filter(n => n.id.toUpperCase().includes(query));
+            if (matches.length > 0) {
+                matches.slice(0, 8).forEach(match => {
+                    const li = document.createElement('li');
+                    li.textContent = match.id.replace('GITHUB_', '');
+                    li.onclick = () => {
+                        searchInput.value = match.id;
+                        resultsList.style.display = 'none';
+                        searchNode();
+                    };
+                    resultsList.appendChild(li);
+                });
+                resultsList.style.display = 'block';
+            } else {
+                resultsList.style.display = 'none';
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!document.getElementById('header').contains(e.target)) {
+                resultsList.style.display = 'none';
+            }
         });
 
         let currentSearchQuery = "";
@@ -540,7 +610,7 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
         let currentSearchIndex = 0;
 
         function searchNode() {
-            const query = document.getElementById('search-input').value.toUpperCase().trim();
+            const query = searchInput.value.toUpperCase().trim();
             if (!query) return;
 
             const exactMatch = nodes.find(n => n.id.toUpperCase() === query);
@@ -581,7 +651,7 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
             }
         }
 
-        document.getElementById('search-input').addEventListener('keypress', function (e) {
+        searchInput.addEventListener('keypress', function (e) {
             if (e.key === 'Enter') {
                 searchNode();
             }
