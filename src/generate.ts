@@ -40,7 +40,9 @@ export const llmConfig = {
       messages: [{ role: "user", content: prompt }],
       response_format: { type: "json_object" },
     });
-    return JSON.parse(response.choices[0].message.content || "{}");
+    let content = response.choices[0].message.content || "{}";
+    content = content.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
+    return JSON.parse(content);
   }
 };
 
@@ -348,11 +350,51 @@ Return a JSON object mapping each required parameter to an array of valid produc
   }
 }
 
+export function detectAndRemoveCycles(nodes: Node[], edges: Edge[]): Edge[] {
+  const adj = new Map<string, Array<{ to: string; edge: Edge }>>();
+  for (const n of nodes) {
+    adj.set(n.id, []);
+  }
+  for (const e of edges) {
+    adj.get(e.from)?.push({ to: e.to, edge: e });
+  }
+
+  const visited = new Set<string>();
+  const recStack = new Set<string>();
+  const edgesToRemove = new Set<Edge>();
+
+  function dfs(u: string) {
+    visited.add(u);
+    recStack.add(u);
+
+    const neighbors = adj.get(u) || [];
+    for (const { to, edge } of neighbors) {
+      if (!visited.has(to)) {
+        dfs(to);
+      } else if (recStack.has(to)) {
+        console.warn(`[Cycle Detected] Breaking cycle: ${u} -> ${to} (label: ${edge.label})`);
+        edgesToRemove.add(edge);
+      }
+    }
+
+    recStack.delete(u);
+  }
+
+  for (const n of nodes) {
+    if (!visited.has(n.id)) {
+      dfs(n.id);
+    }
+  }
+
+  return edges.filter(e => !edgesToRemove.has(e));
+}
+
 async function generate(tools: Tool[]): Promise<Graph> {
   const parsedTools = parseToolCatalog(tools);
   const nodes: Node[] = parsedTools.map(t => ({ id: t.slug }));
   const heuristicEdges = inferHeuristicEdges(parsedTools);
-  const edges = await refineEdgesWithLLM(parsedTools, heuristicEdges);
+  const refinedEdges = await refineEdgesWithLLM(parsedTools, heuristicEdges);
+  const edges = detectAndRemoveCycles(nodes, refinedEdges);
   return { nodes, edges };
 }
 
@@ -410,6 +452,10 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
         <h1>Tool Dependency Graph</h1>
         <p>Interactive visualization of Composio tool dependencies</p>
         <p id="stats"></p>
+        <div style="margin-top: 10px; display: flex; gap: 8px;">
+            <input type="text" id="search-input" placeholder="Search tool (e.g. issue)" style="background: rgba(31, 41, 55, 0.8); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 6px 12px; border-radius: 6px; font-size: 12px; width: 180px; outline: none;" />
+            <button onclick="searchNode()" style="background: #3b82f6; border: none; color: white; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 500;">Search</button>
+        </div>
     </div>
     <div id="network"></div>
     <script type="text/javascript">
@@ -480,6 +526,29 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
             interaction: { hover: true, tooltipDelay: 200 }
         };
         const network = new vis.Network(container, data, options);
+
+        function searchNode() {
+            const query = document.getElementById('search-input').value.toUpperCase();
+            if (!query) return;
+            
+            const match = nodes.find(n => n.id.toUpperCase().includes(query));
+            if (match) {
+                network.selectNodes([match.id]);
+                network.focus(match.id, {
+                    scale: 1.2,
+                    animation: {
+                        duration: 1000,
+                        easingFunction: 'easeInOutQuad'
+                    }
+                });
+            }
+        }
+
+        document.getElementById('search-input').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                searchNode();
+            }
+        });
     </script>
 </body>
 </html>`;

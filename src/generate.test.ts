@@ -1,7 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert";
 import { readFileSync, existsSync, unlinkSync } from "fs";
-import { parseTool, Tool, isStaticParameter, inferHeuristicEdges, ToolMetadata, getToolDomain, refineEdgesWithLLM, llmConfig, writeVisualizationHTML } from "./generate.js";
+import { parseTool, Tool, isStaticParameter, inferHeuristicEdges, ToolMetadata, getToolDomain, refineEdgesWithLLM, llmConfig, writeVisualizationHTML, detectAndRemoveCycles } from "./generate.js";
 
 describe("Tool Catalog Parser", () => {
   test("extracts slug, description, and required parameters", () => {
@@ -214,5 +214,27 @@ describe("Tool Catalog Parser", () => {
     assert.ok(content.includes(JSON.stringify(mockEdges)));
 
     unlinkSync(tempPath);
+  });
+
+  test("detects and breaks cycles in edges to ensure a Directed Acyclic Graph (DAG)", () => {
+    const mockNodes = [{ id: "A" }, { id: "B" }, { id: "C" }];
+    const mockEdges = [
+      { from: "A", to: "B", label: "label1" },
+      { from: "B", to: "C", label: "label2" },
+      { from: "C", to: "A", label: "label3" }
+    ];
+
+    const cleanEdges = detectAndRemoveCycles(mockNodes, mockEdges);
+
+    assert.strictEqual(cleanEdges.length, 2);
+    const hasBackEdge = cleanEdges.some(e => e.from === "C" && e.to === "A");
+    assert.strictEqual(hasBackEdge, false);
+  });
+
+  test("strips markdown JSON blocks prior to parsing", () => {
+    const content = "```json\n{\"test\": 123}\n```";
+    const cleaned = content.replace(/^```json\s*/i, "").replace(/```$/, "").trim();
+    const parsed = JSON.parse(cleaned);
+    assert.strictEqual(parsed.test, 123);
   });
 });
