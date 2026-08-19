@@ -1,0 +1,338 @@
+[
+  {
+    "from": "GITHUB_CREATE_AN_ISSUE",
+    "to": "GITHUB_CREATE_AN_ISSUE_COMMENT",
+    "label": "issue_number",
+    "expected": true,
+    "reason": "A newly created issue supplies the number required to create a comment."
+  },
+  {
+    "from": "GITHUB_GET_AN_ISSUE",
+    "to": "GITHUB_UPDATE_AN_ISSUE",
+    "label": "issue_number",
+    "expected": true,
+    "reason": "Fetching an issue supplies the number required to update it."
+  },
+  {
+    "from": "GITHUB_LIST_REPOSITORY_ISSUES",
+    "to": "GITHUB_CLOSE_ISSUE",
+    "label": "issue_number",
+    "expected": true,
+    "reason": "A listed issue supplies the number required to close it."
+  },
+  {
+    "from": "GITHUB_SEARCH_ISSUES",
+    "to": "GITHUB_ADD_LABELS_TO_AN_ISSUE",
+    "label": "issue_number",
+    "expected": true,
+    "reason": "Issue search results supply issue numbers that can be labeled."
+  },
+  {
+    "from": "GITHUB_CREATE_A_PULL_REQUEST",
+    "to": "GITHUB_MERGE_A_PULL_REQUEST",
+    "label": "pull_number",
+    "expected": true,
+    "reason": "A created pull request supplies the number required to merge it."
+  },
+  {
+    "from": "GITHUB_GET_A_PULL_REQUEST",
+    "to": "GITHUB_REQUEST_REVIEWERS_FOR_A_PULL_REQUEST",
+    "label": "pull_number",
+    "expected": true,
+    "reason": "A fetched pull request supplies the number required to request reviewers."
+  },
+  {
+    "from": "GITHUB_LIST_PULL_REQUESTS",
+    "to": "GITHUB_CLOSE_PULL_REQUEST",
+    "label": "pull_number",
+    "expected": true,
+    "reason": "A listed pull request supplies the number required to close it."
+  },
+  {
+    "from": "GITHUB_FIND_PULL_REQUESTS",
+    "to": "GITHUB_UPDATE_A_PULL_REQUEST",
+    "label": "pull_number",
+    "expected": true,
+    "reason": "A matching pull request supplies the number required to update it."
+  },
+  {
+    "from": "GITHUB_CREATE_A_RELEASE",
+    "to": "GITHUB_UPLOAD_RELEASE_ASSET",
+    "label": "release_id",
+    "expected": true,
+    "reason": "A created release supplies the ID required to upload an asset."
+  },
+  {
+    "from": "GITHUB_GET_A_RELEASE",
+    "to": "GITHUB_UPDATE_A_RELEASE",
+    "label": "release_id",
+    "expected": true,
+    "reason": "A fetched release supplies the ID required to update it."
+  },
+  {
+    "from": "GITHUB_GET_A_RELEASE_BY_TAG_NAME",
+    "to": "GITHUB_DELETE_A_RELEASE",
+    "label": "release_id",
+    "expected": true,
+    "reason": "Resolving a release by tag supplies the ID required to delete it."
+  },
+  {
+    "from": "GITHUB_LIST_RELEASES",
+    "to": "GITHUB_LIST_RELEASE_ASSETS",
+    "label": "release_id",
+    "expected": true,
+    "reason": "A listed release supplies the ID required to list its assets."
+  },
+  {
+    "from": "GITHUB_GET_A_WORKFLOW_RUN",
+    "to": "GITHUB_CANCEL_WORKFLOW_RUN",
+    "label": "run_id",
+    "expected": true,
+    "reason": "A workflow run supplies the run ID required for cancellation."
+  },
+  {
+    "from": "GITHUB_LIST_WORKFLOW_RUNS_FOR_A_REPOSITORY",
+    "to": "GITHUB_RE_RUN_A_WORKFLOW",
+    "label": "run_id",
+    "expected": true,
+    "reason": "A listed workflow run supplies the run ID required for a rerun."
+  },
+  {
+    "from": "GITHUB_GET_WORKFLOW_RUN_JOB",
+    "to": "GITHUB_RE_RUN_A_JOB_FROM_A_WORKFLOW_RUN",
+    "label": "job_id",
+    "expected": true,
+    "reason": "A workflow job supplies the job ID required to rerun it."
+  },
+  {
+    "from": "GITHUB_LIST_JOBS_FOR_A_WORKFLOW_RUN",
+    "to": "GITHUB_GET_WORKFLOW_RUN_JOB",
+    "label": "job_id",
+    "expected": true,
+    "reason": "A listed workflow job supplies the job ID required to fetch its details."
+  },
+  {
+    "from": "GITHUB_CREATE_A_DEPLOYMENT",
+    "to": "GITHUB_CREATE_A_DEPLOYMENT_STATUS",
+    "label": "deployment_id",
+    "expected": true,
+    "reason": "A created deployment supplies the ID required to publish a status."
+  },
+  {
+    "from": "GITHUB_GET_DEPLOYMENT",
+    "to": "GITHUB_LIST_DEPLOYMENT_STATUSES",
+    "label": "deployment_id",
+    "expected": true,
+    "reason": "A fetched deployment supplies the ID required to list its statuses."
+  },
+  {
+    "from": "GITHUB_LIST_DEPLOYMENTS",
+    "to": "GITHUB_GET_DEPLOYMENT",
+    "label": "deployment_id",
+    "expected": true,
+    "reason": "A listed deployment supplies the ID required to retrieve it."
+  },
+  {
+    "from": "GITHUB_GET_A_PROJECT_COLUMN",
+    "to": "GITHUB_CREATE_A_PROJECT_CARD",
+    "label": "column_id",
+    "expected": true,
+    "reason": "A project column supplies the ID required to create a card in it."
+  },
+  {
+    "from": "GITHUB_LIST_PROJECT_COLUMNS",
+    "to": "GITHUB_MOVE_A_PROJECT_COLUMN",
+    "label": "column_id",
+    "expected": true,
+    "reason": "A listed project column supplies the ID required to move it."
+  },
+  {
+    "from": "GITHUB_GET_A_PROJECT_CARD",
+    "to": "GITHUB_MOVE_A_PROJECT_CARD",
+    "label": "card_id",
+    "expected": true,
+    "reason": "A project card supplies the ID required to move it."
+  },
+  {
+    "from": "GITHUB_LIST_PROJECT_CARDS",
+    "to": "GITHUB_UPDATE_PROJECT_CARD",
+    "label": "card_id",
+    "expected": true,
+    "reason": "A listed project card supplies the ID required to update it."
+  },
+  {
+    "from": "GITHUB_GET_A_REVIEW_FOR_A_PULL_REQUEST",
+    "to": "GITHUB_SUBMIT_A_REVIEW_FOR_A_PULL_REQUEST",
+    "label": "review_id",
+    "expected": true,
+    "reason": "A fetched pending review supplies the ID required to submit it."
+  },
+  {
+    "from": "GITHUB_GET_AN_ISSUE_COMMENT",
+    "to": "GITHUB_UPDATE_AN_ISSUE",
+    "label": "issue_number",
+    "expected": false,
+    "reason": "A comment ID is not an issue number."
+  },
+  {
+    "from": "GITHUB_LIST_ISSUE_COMMENTS",
+    "to": "GITHUB_CLOSE_ISSUE",
+    "label": "issue_number",
+    "expected": false,
+    "reason": "Comment results should not be treated as issue-number producers."
+  },
+  {
+    "from": "GITHUB_CREATE_REACTION_FOR_AN_ISSUE_COMMENT",
+    "to": "GITHUB_ADD_LABELS_TO_AN_ISSUE",
+    "label": "issue_number",
+    "expected": false,
+    "reason": "A reaction or comment identifier is not an issue number."
+  },
+  {
+    "from": "GITHUB_GET_A_PULL_REQUEST",
+    "to": "GITHUB_UPDATE_AN_ISSUE",
+    "label": "issue_number",
+    "expected": false,
+    "reason": "A pull-request number is not an issue dependency in this tool contract."
+  },
+  {
+    "from": "GITHUB_GET_AN_ISSUE",
+    "to": "GITHUB_MERGE_A_PULL_REQUEST",
+    "label": "pull_number",
+    "expected": false,
+    "reason": "An issue result should not supply a pull-request number."
+  },
+  {
+    "from": "GITHUB_GET_A_REVIEW_FOR_A_PULL_REQUEST",
+    "to": "GITHUB_CLOSE_PULL_REQUEST",
+    "label": "pull_number",
+    "expected": false,
+    "reason": "A review ID is not a pull-request number."
+  },
+  {
+    "from": "GITHUB_LIST_COMMITS_ON_A_PULL_REQUEST",
+    "to": "GITHUB_UPDATE_A_PULL_REQUEST",
+    "label": "pull_number",
+    "expected": false,
+    "reason": "Commit results should not be treated as pull-request-number producers."
+  },
+  {
+    "from": "GITHUB_GET_A_REVIEW_COMMENT_FOR_A_PULL_REQUEST",
+    "to": "GITHUB_REQUEST_REVIEWERS_FOR_A_PULL_REQUEST",
+    "label": "pull_number",
+    "expected": false,
+    "reason": "A review-comment ID is not a pull-request number."
+  },
+  {
+    "from": "GITHUB_GET_A_RELEASE_ASSET",
+    "to": "GITHUB_DELETE_A_RELEASE",
+    "label": "release_id",
+    "expected": false,
+    "reason": "A release-asset ID is not the parent release ID."
+  },
+  {
+    "from": "GITHUB_LIST_RELEASE_ASSETS",
+    "to": "GITHUB_UPDATE_A_RELEASE",
+    "label": "release_id",
+    "expected": false,
+    "reason": "Asset results should not be treated as release-ID producers."
+  },
+  {
+    "from": "GITHUB_GET_AN_ISSUE",
+    "to": "GITHUB_DELETE_A_RELEASE",
+    "label": "release_id",
+    "expected": false,
+    "reason": "An issue does not produce a release ID."
+  },
+  {
+    "from": "GITHUB_GET_A_RELEASE",
+    "to": "GITHUB_UPDATE_A_RELEASE_ASSET",
+    "label": "asset_id",
+    "expected": false,
+    "reason": "A release ID is not a release-asset ID."
+  },
+  {
+    "from": "GITHUB_CREATE_A_CHECK_RUN",
+    "to": "GITHUB_CANCEL_WORKFLOW_RUN",
+    "label": "run_id",
+    "expected": false,
+    "reason": "A check-run ID is not a workflow-run ID."
+  },
+  {
+    "from": "GITHUB_GET_CHECK_RUN",
+    "to": "GITHUB_RE_RUN_A_WORKFLOW",
+    "label": "run_id",
+    "expected": false,
+    "reason": "A check-run result should not be treated as a workflow run."
+  },
+  {
+    "from": "GITHUB_GET_A_SELF_HOSTED_RUNNER_FOR_A_REPOSITORY",
+    "to": "GITHUB_CANCEL_WORKFLOW_RUN",
+    "label": "run_id",
+    "expected": false,
+    "reason": "A runner ID is not a workflow-run ID."
+  },
+  {
+    "from": "GITHUB_CREATE_JIT_RUNNER_CONFIG",
+    "to": "GITHUB_RE_RUN_A_WORKFLOW",
+    "label": "run_id",
+    "expected": false,
+    "reason": "A runner configuration does not produce a workflow-run ID."
+  },
+  {
+    "from": "GITHUB_GET_A_WORKFLOW_RUN",
+    "to": "GITHUB_RE_RUN_A_JOB_FROM_A_WORKFLOW_RUN",
+    "label": "job_id",
+    "expected": false,
+    "reason": "A workflow-run ID is not a job ID."
+  },
+  {
+    "from": "GITHUB_GET_CHECK_RUN",
+    "to": "GITHUB_GET_WORKFLOW_RUN_JOB",
+    "label": "job_id",
+    "expected": false,
+    "reason": "A check-run ID is not a workflow-job ID."
+  },
+  {
+    "from": "GITHUB_GET_DEPLOYMENT_STATUS",
+    "to": "GITHUB_CREATE_A_DEPLOYMENT_STATUS",
+    "label": "deployment_id",
+    "expected": false,
+    "reason": "A deployment-status ID is not the parent deployment ID."
+  },
+  {
+    "from": "GITHUB_LIST_DEPLOYMENT_STATUSES",
+    "to": "GITHUB_GET_DEPLOYMENT",
+    "label": "deployment_id",
+    "expected": false,
+    "reason": "Deployment-status results should not be treated as deployments."
+  },
+  {
+    "from": "GITHUB_GET_A_PROJECT_CARD",
+    "to": "GITHUB_CREATE_A_PROJECT_CARD",
+    "label": "column_id",
+    "expected": false,
+    "reason": "A card ID is not a column ID."
+  },
+  {
+    "from": "GITHUB_GET_A_PROJECT_COLUMN",
+    "to": "GITHUB_MOVE_A_PROJECT_CARD",
+    "label": "card_id",
+    "expected": false,
+    "reason": "A column ID is not a card ID."
+  },
+  {
+    "from": "GITHUB_GET_A_PROJECT",
+    "to": "GITHUB_MOVE_A_PROJECT_COLUMN",
+    "label": "column_id",
+    "expected": false,
+    "reason": "A project ID is not a column ID."
+  },
+  {
+    "from": "GITHUB_GET_A_PULL_REQUEST",
+    "to": "GITHUB_SUBMIT_A_REVIEW_FOR_A_PULL_REQUEST",
+    "label": "review_id",
+    "expected": false,
+    "reason": "A pull-request number is not a review ID."
+  }
+]

@@ -137,6 +137,43 @@ describe("Tool Catalog Parser", () => {
     assert.strictEqual(issueEdge.label, "issue_number");
   });
 
+  test("does not confuse related resources that expose generic IDs", () => {
+    const mockTools: ToolMetadata[] = [
+      {
+        slug: "GITHUB_GET_A_RELEASE_ASSET",
+        description: "Get a release asset",
+        requiredInputs: [],
+        inputProperties: {},
+        outputProperties: { id: { type: "integer" } },
+      },
+      {
+        slug: "GITHUB_DELETE_A_RELEASE",
+        description: "Delete a release",
+        requiredInputs: ["release_id"],
+        inputProperties: {},
+        outputProperties: {},
+      },
+      {
+        slug: "GITHUB_GET_A_WORKFLOW_RUN",
+        description: "Get a workflow run",
+        requiredInputs: [],
+        inputProperties: {},
+        outputProperties: { id: { type: "integer" } },
+      },
+      {
+        slug: "GITHUB_CANCEL_WORKFLOW_RUN",
+        description: "Cancel a workflow run",
+        requiredInputs: ["run_id"],
+        inputProperties: {},
+        outputProperties: {},
+      },
+    ];
+
+    const edges = inferHeuristicEdges(mockTools);
+    assert.ok(edges.some((edge) => edge.from === "GITHUB_GET_A_WORKFLOW_RUN"));
+    assert.ok(!edges.some((edge) => edge.from === "GITHUB_GET_A_RELEASE_ASSET"));
+  });
+
   test("categorizes tools into domains correctly", () => {
     assert.strictEqual(getToolDomain("GITHUB_CREATE_AN_ISSUE_COMMENT"), "Issues");
     assert.strictEqual(getToolDomain("GITHUB_MERGE_A_PULL_REQUEST"), "PullRequests");

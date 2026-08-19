@@ -1,5 +1,7 @@
 # ToolGraph
 
+[Live visualization](https://tarun05rawat.github.io/dep-graph/) | [CI](https://github.com/tarun05rawat/dep-graph/actions)
+
 ToolGraph generates an executable dependency graph from a catalog of API tools. It identifies which tools can produce the inputs required by other tools, creating a machine-readable map that an AI agent can use to plan multi-step actions.
 
 For example, commenting on a GitHub issue requires an `issue_number`. ToolGraph can connect an issue-listing or issue-creation tool to the comment tool because the first operation produces the value required by the second.
@@ -31,11 +33,13 @@ Running ToolGraph against the included GitHub catalog currently produces:
 | --- | ---: |
 | Catalog size | 7.7 MB |
 | Tools represented | 893 |
-| Labeled dependency edges | 2,495 |
+| Labeled dependency edges | 2,337 |
 | Node provenance | 100% |
-| Automated tests | 9 |
+| Automated tests | 11 |
+| Labeled regression cases | 48 (24 positive, 24 negative) |
+| Edge precision / recall / F1 | 1.00 / 1.00 / 1.00 |
 
-Node provenance means every generated node maps back to a tool slug in the source catalog. It does not, by itself, measure the semantic precision of every inferred edge; see [Limitations](#limitations).
+Node provenance means every generated node maps back to a tool slug in the source catalog. The edge metrics are measured on the included, manually labeled GitHub regression set; they verify known cases but should not be interpreted as accuracy across arbitrary tool catalogs.
 
 ## How It Works
 
@@ -142,10 +146,14 @@ The direction is always `producer -> consumer`. The label is the value supplied 
 
 ```text
 dep-graph/
-├── .github/workflows/ci.yml  # Automated type checking and tests
+├── .github/workflows/        # CI and GitHub Pages deployment
+├── evaluation/
+│   └── labeled_edges.json    # Balanced, manually labeled edge benchmark
 ├── src/
 │   ├── generate.ts       # Parser, inference engine, LLM refinement, DAG logic, and visualizer
 │   ├── generate.test.ts  # Unit tests for core behavior
+│   ├── evaluate.ts       # Precision, recall, F1, and accuracy evaluator
+│   ├── evaluate.test.ts  # Metric calculation tests
 │   └── selfcheck.ts      # End-to-end output and provenance checks
 ├── .env.example          # Optional model-provider configuration
 ├── github_catalog.json   # Example GitHub tool catalog
@@ -218,6 +226,12 @@ Run the unit tests:
 npm test
 ```
 
+Run type checking, tests, and the labeled edge evaluation together:
+
+```bash
+npm run check
+```
+
 The test suite covers:
 
 - tool metadata extraction
@@ -229,6 +243,16 @@ The test suite covers:
 - visualization generation
 - cycle detection and removal
 - structured JSON cleanup
+
+### Labeled edge evaluation
+
+The evaluation set contains an equal number of valid and invalid producer-to-consumer relationships across issues, pull requests, releases, workflows, deployments, and projects. Each case names the expected edge and the required field transferred between tools.
+
+```bash
+npm run evaluate
+```
+
+The evaluator reports precision, recall, F1, and accuracy for deterministic edge inference. It runs before cycle removal because DAG conversion is a separate structural pass that may intentionally prune a semantically valid edge.
 
 Run the end-to-end self-check:
 
@@ -265,14 +289,14 @@ The graph can retain deterministic candidates when model refinement encounters a
 
 - Domain and producer classification currently rely partly on naming conventions.
 - LLM refinement filters deterministic candidates; it does not yet add entirely new relationships missed by the heuristic stage.
-- The included self-check validates structure and provenance, not complete semantic precision or recall.
+- The labeled set is a focused regression benchmark, not an independently sampled estimate of performance on every API ecosystem.
 - Cycle removal is based on traversal order rather than learned edge confidence.
 - The sample catalog is GitHub-heavy; broader evaluation across unrelated toolkits would better test generalization.
 - Large graphs can become visually dense even with search and domain coloring.
 
 ## Roadmap
 
-- Add a hand-labeled evaluation set with edge precision, recall, and F1 metrics.
+- Expand the labeled benchmark across non-GitHub tool catalogs.
 - Add confidence scores and provenance metadata to every edge.
 - Rank competing producer tools by semantic fit and execution cost.
 - Support additional schema variants such as `oneOf`, `anyOf`, and deeply nested arrays.

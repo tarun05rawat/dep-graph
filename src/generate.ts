@@ -198,6 +198,25 @@ export function getToolDomain(slug: string): string {
 export const PRODUCER_KEYWORDS = ["GET", "LIST", "CREATE", "START", "QUEUE", "SEARCH", "FIND"];
 export const SUB_ENTITIES = ["COMMENT", "EVENT", "REACTION", "REVIEW", "ALERT", "COMMIT", "FILE"];
 
+const ENTITY_RULES: Record<string, { all: string[]; none?: string[] }> = {
+  run_id: { all: ["WORKFLOW", "RUN"], none: ["CHECK", "RUNNER"] },
+  job_id: { all: ["JOB"] },
+  release_id: { all: ["RELEASE"], none: ["ASSET"] },
+  deployment_id: { all: ["DEPLOYMENT"], none: ["STATUS"] },
+  column_id: { all: ["COLUMN"], none: ["CARD"] },
+  card_id: { all: ["CARD"] },
+  review_id: { all: ["REVIEW"], none: ["COMMENT"] },
+};
+
+function producerMatchesEntity(slug: string, requiredInput: string): boolean {
+  const rule = ENTITY_RULES[requiredInput.toLowerCase()];
+  if (!rule) return true;
+
+  const upper = slug.toUpperCase();
+  return rule.all.every((token) => upper.includes(token)) &&
+    !(rule.none ?? []).some((token) => upper.includes(token));
+}
+
 export function inferHeuristicEdges(tools: ToolMetadata[]): Edge[] {
   const edges: Edge[] = [];
 
@@ -246,6 +265,10 @@ export function inferHeuristicEdges(tools: ToolMetadata[]): Edge[] {
         if (!matchedLabel) {
           const isNumOrId = requiredInput.endsWith("_number") || requiredInput.endsWith("_id");
           if (isNumOrId) {
+            if (!producerMatchesEntity(producer.slug, requiredInput)) {
+              continue;
+            }
+
             const entityKeyword = requiredInput.split("_")[0].toUpperCase();
             
             let hasGenericOutput = false;
