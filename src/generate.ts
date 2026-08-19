@@ -99,6 +99,22 @@ export function resolveSchemaProperties(
 
 
 
+export const STATIC_PARAMETERS = new Set([
+  "owner",
+  "repo",
+  "page",
+  "per_page",
+  "limit",
+  "cursor",
+  "sort",
+  "direction",
+  "state",
+]);
+
+export function isStaticParameter(name: string): boolean {
+  return STATIC_PARAMETERS.has(name.toLowerCase());
+}
+
 export function parseTool(tool: Tool): ToolMetadata {
   const slug = slugOf(tool) || "";
   const description = tool.description || "";

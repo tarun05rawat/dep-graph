@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert";
-import { parseTool, Tool } from "./generate.js";
+import { parseTool, Tool, isStaticParameter } from "./generate.js";
 
 describe("Tool Catalog Parser", () => {
   test("extracts slug, description, and required parameters", () => {
@@ -65,5 +65,23 @@ describe("Tool Catalog Parser", () => {
     assert.strictEqual(metadata.outputProperties.nestedId.type, "integer");
     assert.strictEqual(metadata.outputProperties.nestedId.description, "A nested ID");
     assert.strictEqual(metadata.outputProperties.name.type, "string");
+  });
+
+  test("identifies static and dynamic parameters correctly", () => {
+    assert.strictEqual(isStaticParameter("owner"), true);
+    assert.strictEqual(isStaticParameter("REPO"), true);
+    assert.strictEqual(isStaticParameter("per_page"), true);
+    assert.strictEqual(isStaticParameter("page"), true);
+    assert.strictEqual(isStaticParameter("limit"), true);
+    assert.strictEqual(isStaticParameter("cursor"), true);
+    assert.strictEqual(isStaticParameter("sort"), true);
+    assert.strictEqual(isStaticParameter("direction"), true);
+    assert.strictEqual(isStaticParameter("state"), true);
+
+    assert.strictEqual(isStaticParameter("issue_number"), false);
+    assert.strictEqual(isStaticParameter("pull_number"), false);
+    assert.strictEqual(isStaticParameter("comment_id"), false);
+    assert.strictEqual(isStaticParameter("migrationId"), false);
+    assert.strictEqual(isStaticParameter("some_other_field"), false);
   });
 });
