@@ -1,6 +1,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert";
-import { parseTool, Tool, isStaticParameter, inferHeuristicEdges, ToolMetadata, getToolDomain, refineEdgesWithLLM, llmConfig } from "./generate.js";
+import { readFileSync, existsSync, unlinkSync } from "fs";
+import { parseTool, Tool, isStaticParameter, inferHeuristicEdges, ToolMetadata, getToolDomain, refineEdgesWithLLM, llmConfig, writeVisualizationHTML } from "./generate.js";
 
 describe("Tool Catalog Parser", () => {
   test("extracts slug, description, and required parameters", () => {
@@ -192,5 +193,26 @@ describe("Tool Catalog Parser", () => {
 
     llmConfig.askLLM = originalAsk;
     delete process.env.OPENAI_API_KEY;
+  });
+
+  test("writes visualization.html with correct nodes and edges embedded", () => {
+    const mockNodes = [{ id: "GITHUB_CREATE_AN_ISSUE" }];
+    const mockEdges = [{ from: "GITHUB_LIST_REPOSITORY_ISSUES", to: "GITHUB_CREATE_AN_ISSUE", label: "issue_number" }];
+    const tempPath = "visualization_test.html";
+
+    if (existsSync(tempPath)) {
+      unlinkSync(tempPath);
+    }
+
+    writeVisualizationHTML(mockNodes, mockEdges, tempPath);
+
+    assert.ok(existsSync(tempPath));
+    const content = readFileSync(tempPath, "utf-8");
+    
+    assert.ok(content.includes("vis-network.min.js"));
+    assert.ok(content.includes(JSON.stringify(mockNodes)));
+    assert.ok(content.includes(JSON.stringify(mockEdges)));
+
+    unlinkSync(tempPath);
   });
 });

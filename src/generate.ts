@@ -356,6 +356,141 @@ async function generate(tools: Tool[]): Promise<Graph> {
   return { nodes, edges };
 }
 
+export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: string = "visualization.html"): void {
+  const htmlTemplate = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tool Dependency Graph Visualizer</title>
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style type="text/css">
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #0b0f19;
+            color: #f3f4f6;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            overflow: hidden;
+        }
+        #header {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            background: rgba(17, 24, 39, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 15px 25px;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+        h1 {
+            margin: 0 0 5px 0;
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #60a5fa, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        p {
+            margin: 0;
+            font-size: 12px;
+            color: #9ca3af;
+        }
+        #network {
+            width: 100vw;
+            height: 100vh;
+        }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <h1>Tool Dependency Graph</h1>
+        <p>Interactive visualization of Composio tool dependencies</p>
+        <p id="stats"></p>
+    </div>
+    <div id="network"></div>
+    <script type="text/javascript">
+        const nodes = __NODES_JSON__;
+        const edges = __EDGES_JSON__;
+
+        document.getElementById('stats').innerText = \`Nodes: \${nodes.length} | Edges: \${edges.length}\`;
+
+        const colorPalette = {
+            'Issues': '#f59e0b',
+            'PullRequests': '#10b981',
+            'Repositories': '#3b82f6',
+            'Organizations': '#8b5cf6',
+            'Projects': '#ec4899',
+            'Actions': '#ef4444',
+            'General': '#6b7280'
+        };
+
+        function getToolDomain(slug) {
+            const upper = slug.toUpperCase();
+            if (upper.includes("PROJECT")) return "Projects";
+            if (upper.includes("WORKFLOW") || upper.includes("ACTION") || upper.includes("RUN")) return "Actions";
+            if (upper.includes("ISSUE") || upper.includes("COMMENT")) return "Issues";
+            if (upper.includes("PULL") || upper.includes("PR") || upper.includes("MERGE")) return "PullRequests";
+            if (upper.includes("TEAM") || upper.includes("ORG") || upper.includes("MEMBER")) return "Organizations";
+            if (upper.includes("REPO") || upper.includes("REPOSITORY") || upper.includes("MIGRAT")) return "Repositories";
+            return "General";
+        }
+
+        const visNodes = nodes.map(n => {
+            const domain = getToolDomain(n.id);
+            return {
+                id: n.id,
+                label: n.id.replace('GITHUB_', ''),
+                title: n.id,
+                color: {
+                    background: '#1f2937',
+                    border: colorPalette[domain] || colorPalette['General'],
+                    highlight: {
+                        background: '#374151',
+                        border: '#ffffff'
+                    }
+                },
+                font: { color: '#f3f4f6', size: 12 },
+                borderWidth: 2,
+                shape: 'box'
+            };
+        });
+
+        const visEdges = edges.map((e, index) => ({
+            id: index,
+            from: e.from,
+            to: e.to,
+            label: e.label,
+            arrows: 'to',
+            color: { color: '#4b5563', highlight: '#3b82f6' },
+            font: { color: '#9ca3af', size: 10, align: 'top' },
+            smooth: { type: 'dynamic' }
+        }));
+
+        const container = document.getElementById('network');
+        const data = { nodes: new vis.DataSet(visNodes), edges: new vis.DataSet(visEdges) };
+        const options = {
+            physics: {
+                stabilization: { iterations: 150 },
+                barnesHut: { gravitationalConstant: -8000, springLength: 200 }
+            },
+            interaction: { hover: true, tooltipDelay: 200 }
+        };
+        const network = new vis.Network(container, data, options);
+    </script>
+</body>
+</html>`;
+
+  const finalHtml = htmlTemplate
+    .replace("__NODES_JSON__", JSON.stringify(nodes))
+    .replace("__EDGES_JSON__", JSON.stringify(edges));
+
+  writeFileSync(path, finalHtml, "utf-8");
+}
+
 async function main() {
   if (!CATALOG_PATH) {
     return;
@@ -365,6 +500,10 @@ async function main() {
   console.error(
     `wrote ${graph.nodes.length} nodes, ${graph.edges.length} edges to ${OUT_PATH}`,
   );
+  
+  const visPath = "visualization.html";
+  writeVisualizationHTML(graph.nodes, graph.edges, visPath);
+  console.error(`wrote interactive visualizer to ${visPath}`);
 }
 
 const isMain = process.argv[1] && (
