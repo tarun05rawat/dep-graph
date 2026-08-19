@@ -527,12 +527,22 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
         };
         const network = new vis.Network(container, data, options);
 
+        let currentSearchQuery = "";
+        let currentSearchMatches = [];
+        let currentSearchIndex = 0;
+
         function searchNode() {
             const query = document.getElementById('search-input').value.toUpperCase();
             if (!query) return;
             
-            const match = nodes.find(n => n.id.toUpperCase().includes(query));
-            if (match) {
+            if (query !== currentSearchQuery) {
+                currentSearchQuery = query;
+                currentSearchMatches = nodes.filter(n => n.id.toUpperCase().includes(query));
+                currentSearchIndex = 0;
+            }
+            
+            if (currentSearchMatches.length > 0) {
+                const match = currentSearchMatches[currentSearchIndex];
                 network.selectNodes([match.id]);
                 network.focus(match.id, {
                     scale: 1.2,
@@ -541,6 +551,11 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
                         easingFunction: 'easeInOutQuad'
                     }
                 });
+                
+                document.getElementById('stats').innerText = \`Nodes: \${nodes.length} | Edges: \${edges.length} | Match \${currentSearchIndex + 1} of \${currentSearchMatches.length}\`;
+                currentSearchIndex = (currentSearchIndex + 1) % currentSearchMatches.length;
+            } else {
+                document.getElementById('stats').innerText = \`Nodes: \${nodes.length} | Edges: \${edges.length} | No matches found\`;
             }
         }
 
