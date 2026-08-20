@@ -6,6 +6,9 @@ export type Tool = Record<string, any>;
 
 export interface Node {
   id: string;
+  label?: string;
+  domain?: string;
+  description?: string;
   service?: string;
 }
 
@@ -16,6 +19,15 @@ export interface Edge {
 }
 
 export interface Graph {
+  nodes: Node[];
+  edges: Edge[];
+}
+
+export interface GraphConfig {
+  title?: string;
+  subtitle?: string;
+  nodePrefixToRemove?: string;
+  domains?: Record<string, string>;
   nodes: Node[];
   edges: Edge[];
 }
@@ -430,6 +442,23 @@ async function generate(tools: Tool[]): Promise<Graph> {
 }
 
 export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: string = "visualization.html"): void {
+  const graphConfig: GraphConfig = {
+    title: "Tool Dependency Graph",
+    subtitle: "Interactive visualization of API tool dependencies",
+    nodePrefixToRemove: "GITHUB_",
+    domains: {
+      Issues: "#f59e0b",
+      PullRequests: "#10b981",
+      Repositories: "#3b82f6",
+      Organizations: "#8b5cf6",
+      Projects: "#ec4899",
+      Actions: "#ef4444",
+      General: "#6b7280",
+    },
+    nodes,
+    edges,
+  };
+
   const htmlTemplate = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -530,52 +559,76 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
             </div>
             <button onclick="searchNode()" style="background: #3b82f6; border: none; color: white; padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 500;">Search</button>
         </div>
+        <div style="margin-top: 10px;">
+            <label for="graph-file-input" style="display: inline-block; font-size: 11px; color: #d1d5db; margin-bottom: 4px;">Load graph JSON</label>
+            <input type="file" id="graph-file-input" accept=".json,application/json" style="display: block; width: 100%; font-size: 11px; color: #d1d5db;" />
+        </div>
         <div style="margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 12px;">
             <p style="font-weight: 600; font-size: 11px; margin-bottom: 8px; color: #e5e7eb; text-align: left;">Domain Legend</p>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 10px; text-align: left;">
-                <div style="display: flex; align-items: center; gap: 6px; color: #d1d5db;">
-                    <span style="display: inline-block; width: 8px; height: 8px; background: #f59e0b; border-radius: 2px;"></span> Issues
-                </div>
-                <div style="display: flex; align-items: center; gap: 6px; color: #d1d5db;">
-                    <span style="display: inline-block; width: 8px; height: 8px; background: #10b981; border-radius: 2px;"></span> PRs
-                </div>
-                <div style="display: flex; align-items: center; gap: 6px; color: #d1d5db;">
-                    <span style="display: inline-block; width: 8px; height: 8px; background: #3b82f6; border-radius: 2px;"></span> Repos
-                </div>
-                <div style="display: flex; align-items: center; gap: 6px; color: #d1d5db;">
-                    <span style="display: inline-block; width: 8px; height: 8px; background: #8b5cf6; border-radius: 2px;"></span> Orgs
-                </div>
-                <div style="display: flex; align-items: center; gap: 6px; color: #d1d5db;">
-                    <span style="display: inline-block; width: 8px; height: 8px; background: #ec4899; border-radius: 2px;"></span> Projects
-                </div>
-                <div style="display: flex; align-items: center; gap: 6px; color: #d1d5db;">
-                    <span style="display: inline-block; width: 8px; height: 8px; background: #ef4444; border-radius: 2px;"></span> Actions
-                </div>
-                <div style="display: flex; align-items: center; gap: 6px; color: #d1d5db; grid-column: span 2;">
-                    <span style="display: inline-block; width: 8px; height: 8px; background: #6b7280; border-radius: 2px;"></span> General
-                </div>
+            <div id="legend-items" style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 10px; text-align: left;">
             </div>
         </div>
     </div>
     <div id="network"></div>
     <script type="text/javascript">
-        const nodes = __NODES_JSON__;
-        const edges = __EDGES_JSON__;
+        const defaultGraphConfig = __GRAPH_CONFIG_JSON__;
+        const defaultColorPalette = defaultGraphConfig.domains || {};
+        let network = null;
+        let nodeData = null;
+        let edgeData = null;
+        let currentGraphConfig = defaultGraphConfig;
+        let currentNodes = [];
+        let currentEdges = [];
+        let labeledEdgeIds = [];
+        let currentSearchQuery = "";
+        let currentSearchMatches = [];
+        let currentSearchIndex = 0;
 
-        document.getElementById('stats').innerText = \`Nodes: \${nodes.length} | Edges: \${edges.length}\`;
+        const searchInput = document.getElementById('search-input');
+        const resultsList = document.getElementById('search-results');
+        const titleEl = document.querySelector('#header h1');
+        const subtitleEl = document.querySelector('#header p');
+        const statsEl = document.getElementById('stats');
+        const legendItemsEl = document.getElementById('legend-items');
+        const fileInput = document.getElementById('graph-file-input');
 
-        const colorPalette = {
-            'Issues': '#f59e0b',
-            'PullRequests': '#10b981',
-            'Repositories': '#3b82f6',
-            'Organizations': '#8b5cf6',
-            'Projects': '#ec4899',
-            'Actions': '#ef4444',
-            'General': '#6b7280'
-        };
+        function normalizeSearchValue(value) {
+            return String(value || '')
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '_')
+                .replace(/^_+|_+$/g, '');
+        }
 
-        function getToolDomain(slug) {
-            const upper = slug.toUpperCase();
+        function prettifyDomainName(domain) {
+            return String(domain || '')
+                .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+                .replace(/_/g, ' ')
+                .trim() || 'General';
+        }
+
+        function hashColor(input) {
+            let hash = 0;
+            const text = String(input || 'General');
+            for (let i = 0; i < text.length; i += 1) {
+                hash = ((hash << 5) - hash) + text.charCodeAt(i);
+                hash |= 0;
+            }
+            const hue = Math.abs(hash) % 360;
+            return \`hsl(\${hue} 65% 55%)\`;
+        }
+
+        function getPalette(config) {
+            return Object.assign({}, defaultColorPalette, config.domains || {});
+        }
+
+        function getNodeLabel(node, config) {
+            if (node.label) return node.label;
+            const prefix = config.nodePrefixToRemove || '';
+            return prefix && node.id.startsWith(prefix) ? node.id.slice(prefix.length) : node.id;
+        }
+
+        function inferToolDomain(node) {
+            const upper = String(node.id || '').toUpperCase();
             if (upper.includes("PROJECT")) return "Projects";
             if (upper.includes("WORKFLOW") || upper.includes("ACTION") || upper.includes("RUN")) return "Actions";
             if (upper.includes("ISSUE") || upper.includes("COMMENT")) return "Issues";
@@ -585,111 +638,61 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
             return "General";
         }
 
-        const connectedNodeIds = new Set(edges.flatMap(edge => [edge.from, edge.to]));
-        const isolatedNodes = nodes.filter(node => !connectedNodeIds.has(node.id));
-        const isolatedPositions = new Map();
-        const ringCount = 3;
-        const nodesPerRing = Math.ceil(isolatedNodes.length / ringCount);
-
-        isolatedNodes.forEach((node, index) => {
-            const ring = index % ringCount;
-            const positionInRing = Math.floor(index / ringCount);
-            const angle = (positionInRing / nodesPerRing) * Math.PI * 2 + ring * 0.08;
-            const radius = 3400 + ring * 650;
-            isolatedPositions.set(node.id, {
-                x: Math.cos(angle) * radius,
-                y: Math.sin(angle) * radius
-            });
-        });
-
-        const visNodes = nodes.map(n => {
-            const domain = getToolDomain(n.id);
-            const isolatedPosition = isolatedPositions.get(n.id);
-            return {
-                id: n.id,
-                label: n.id.replace('GITHUB_', ''),
-                title: n.id,
-                color: {
-                    background: '#1f2937',
-                    border: colorPalette[domain] || colorPalette['General'],
-                    highlight: {
-                        background: '#374151',
-                        border: '#ffffff'
-                    }
-                },
-                font: { color: '#f3f4f6', size: 12 },
-                borderWidth: 2,
-                shape: 'box',
-                ...(isolatedPosition ? {
-                    x: isolatedPosition.x,
-                    y: isolatedPosition.y,
-                    physics: false
-                } : {})
-            };
-        });
-
-        const visEdges = edges.map((e, index) => ({
-            id: index,
-            from: e.from,
-            to: e.to,
-            dependencyLabel: e.label,
-            arrows: 'to',
-            color: { color: 'rgba(75, 85, 99, 0.28)', highlight: '#3b82f6' },
-            width: 0.7,
-            hoverWidth: 1.5,
-            selectionWidth: 2,
-            title: e.label,
-            smooth: { type: 'continuous', roundness: 0.15 }
-        }));
-
-        const container = document.getElementById('network');
-        const nodeData = new vis.DataSet(visNodes);
-        const edgeData = new vis.DataSet(visEdges);
-        const data = { nodes: nodeData, edges: edgeData };
-        const options = {
-            physics: {
-                stabilization: false,
-                barnesHut: {
-                    gravitationalConstant: -12000,
-                    centralGravity: 0.15,
-                    springLength: 240,
-                    springConstant: 0.02,
-                    damping: 0.45,
-                    avoidOverlap: 0.25
-                }
-            },
-            interaction: {
-                hover: true,
-                tooltipDelay: 200,
-                dragNodes: true,
-                dragView: true,
-                zoomView: true,
-                hideEdgesOnDrag: false
-            }
-        };
-        const network = new vis.Network(container, data, options);
-
-        let layoutReady = false;
-
-        function finishLayout() {
-            if (layoutReady) return;
-            layoutReady = true;
-            network.setOptions({ physics: false });
-            network.redraw();
+        function getNodeDomain(node) {
+            return node.domain || inferToolDomain(node);
         }
 
-        network.fit({ animation: false });
-        network.once('stabilized', finishLayout);
-        setTimeout(finishLayout, 5000);
+        function getNodeColor(domain, palette) {
+            return palette[domain] || hashColor(domain);
+        }
 
-        let labeledEdgeIds = [];
+        function getNodeSearchBlob(node, config) {
+            return [
+                node.id,
+                getNodeLabel(node, config),
+                node.description || '',
+                getNodeDomain(node),
+            ].map(normalizeSearchValue).join(' ');
+        }
+
+        function updateStats(extra) {
+            const summary = \`Nodes: \${currentNodes.length} | Edges: \${currentEdges.length}\`;
+            statsEl.innerText = extra ? \`\${summary} | \${extra}\` : summary;
+        }
+
+        function renderLegend(config) {
+            const palette = getPalette(config);
+            const seen = new Set();
+            const domainsInGraph = currentNodes.map(getNodeDomain).filter(Boolean);
+            const orderedDomains = [
+                ...Object.keys(palette),
+                ...domainsInGraph,
+            ].filter((domain) => {
+                if (seen.has(domain)) return false;
+                seen.add(domain);
+                return domainsInGraph.includes(domain) || domain === 'General';
+            });
+
+            legendItemsEl.innerHTML = orderedDomains.map((domain) => {
+                const color = getNodeColor(domain, palette);
+                const label = prettifyDomainName(domain);
+                return \`<div style="display: flex; align-items: center; gap: 6px; color: #d1d5db;">
+                    <span style="display: inline-block; width: 8px; height: 8px; background: \${color}; border-radius: 2px;"></span> \${label}
+                </div>\`;
+            }).join('');
+        }
+
+        function clearDependencyLabels() {
+            if (!edgeData || labeledEdgeIds.length === 0) return;
+            edgeData.update(labeledEdgeIds.map((id) => ({ id, label: undefined })));
+            labeledEdgeIds = [];
+        }
 
         function showDependencyLabels(nodeId) {
-            if (labeledEdgeIds.length > 0) {
-                edgeData.update(labeledEdgeIds.map(id => ({ id, label: undefined })));
-            }
+            if (!network || !edgeData) return;
+            clearDependencyLabels();
             labeledEdgeIds = network.getConnectedEdges(nodeId);
-            edgeData.update(labeledEdgeIds.map(id => {
+            edgeData.update(labeledEdgeIds.map((id) => {
                 const edge = edgeData.get(id);
                 return {
                     id,
@@ -699,44 +702,193 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
             }));
         }
 
-        network.on('selectNode', params => showDependencyLabels(params.nodes[0]));
-        network.on('deselectNode', () => {
-            edgeData.update(labeledEdgeIds.map(id => ({ id, label: undefined })));
-            labeledEdgeIds = [];
-        });
+        function focusNode(node, meta) {
+            if (!network) return;
+            network.selectNodes([node.id]);
+            showDependencyLabels(node.id);
+            network.focus(node.id, {
+                scale: 1.2,
+                animation: {
+                    duration: 1000,
+                    easingFunction: 'easeInOutQuad'
+                }
+            });
+            updateStats(meta || \`Focused: \${getNodeLabel(node, currentGraphConfig)}\`);
+        }
 
-        const searchInput = document.getElementById('search-input');
-        const resultsList = document.getElementById('search-results');
-
-        searchInput.addEventListener('input', () => {
-            const query = searchInput.value.toUpperCase().trim();
+        function renderSearchResults(matches) {
             resultsList.innerHTML = '';
-            if (!query) {
+            if (matches.length === 0) {
                 resultsList.style.display = 'none';
                 return;
             }
 
-            const queryWords = query.split(/\\s+/).filter(Boolean);
-            const matches = nodes.filter(n => {
-                const idUpper = n.id.toUpperCase();
-                return queryWords.every(word => idUpper.includes(word));
+            matches.slice(0, 8).forEach((match) => {
+                const li = document.createElement('li');
+                li.textContent = getNodeLabel(match, currentGraphConfig);
+                li.onclick = () => {
+                    searchInput.value = getNodeLabel(match, currentGraphConfig);
+                    resultsList.style.display = 'none';
+                    focusNode(match);
+                };
+                resultsList.appendChild(li);
+            });
+            resultsList.style.display = 'block';
+        }
+
+        function getSearchMatches(rawQuery) {
+            const normalizedQuery = normalizeSearchValue(rawQuery);
+            if (!normalizedQuery) return [];
+            const queryTokens = normalizedQuery.split('_').filter(Boolean);
+            return currentNodes.filter((node) => {
+                const haystack = getNodeSearchBlob(node, currentGraphConfig);
+                return queryTokens.every((token) => haystack.includes(token));
+            });
+        }
+
+        function normalizeGraphConfig(input) {
+            const baseConfig = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+            const normalizedNodes = Array.isArray(baseConfig.nodes) ? baseConfig.nodes : [];
+            const normalizedEdges = Array.isArray(baseConfig.edges) ? baseConfig.edges : [];
+
+            return {
+                title: typeof baseConfig.title === 'string' && baseConfig.title.trim() ? baseConfig.title : defaultGraphConfig.title,
+                subtitle: typeof baseConfig.subtitle === 'string' && baseConfig.subtitle.trim() ? baseConfig.subtitle : defaultGraphConfig.subtitle,
+                nodePrefixToRemove: typeof baseConfig.nodePrefixToRemove === 'string' ? baseConfig.nodePrefixToRemove : defaultGraphConfig.nodePrefixToRemove,
+                domains: baseConfig.domains && typeof baseConfig.domains === 'object' ? baseConfig.domains : defaultGraphConfig.domains,
+                nodes: normalizedNodes,
+                edges: normalizedEdges,
+            };
+        }
+
+        function renderGraph(nextConfig) {
+            currentGraphConfig = normalizeGraphConfig(nextConfig);
+            currentNodes = currentGraphConfig.nodes;
+            currentEdges = currentGraphConfig.edges;
+            currentSearchQuery = '';
+            currentSearchMatches = [];
+            currentSearchIndex = 0;
+            searchInput.value = '';
+            resultsList.style.display = 'none';
+            clearDependencyLabels();
+
+            titleEl.innerText = currentGraphConfig.title || 'Dependency Graph';
+            subtitleEl.innerText = currentGraphConfig.subtitle || 'Interactive visualization';
+            updateStats();
+            renderLegend(currentGraphConfig);
+
+            const palette = getPalette(currentGraphConfig);
+            const connectedNodeIds = new Set(currentEdges.flatMap((edge) => [edge.from, edge.to]));
+            const isolatedNodes = currentNodes.filter((node) => !connectedNodeIds.has(node.id));
+            const isolatedPositions = new Map();
+            const ringCount = 3;
+            const nodesPerRing = Math.max(1, Math.ceil(isolatedNodes.length / ringCount));
+
+            isolatedNodes.forEach((node, index) => {
+                const ring = index % ringCount;
+                const positionInRing = Math.floor(index / ringCount);
+                const angle = (positionInRing / nodesPerRing) * Math.PI * 2 + ring * 0.08;
+                const radius = 3400 + ring * 650;
+                isolatedPositions.set(node.id, {
+                    x: Math.cos(angle) * radius,
+                    y: Math.sin(angle) * radius
+                });
             });
 
-            if (matches.length > 0) {
-                matches.slice(0, 8).forEach(match => {
-                    const li = document.createElement('li');
-                    li.textContent = match.id.replace('GITHUB_', '');
-                    li.onclick = () => {
-                        searchInput.value = match.id;
-                        resultsList.style.display = 'none';
-                        searchNode();
-                    };
-                    resultsList.appendChild(li);
-                });
-                resultsList.style.display = 'block';
-            } else {
-                resultsList.style.display = 'none';
+            const visNodes = currentNodes.map((node) => {
+                const domain = getNodeDomain(node);
+                const isolatedPosition = isolatedPositions.get(node.id);
+                return {
+                    id: node.id,
+                    label: getNodeLabel(node, currentGraphConfig),
+                    title: node.description || node.id,
+                    color: {
+                        background: '#1f2937',
+                        border: getNodeColor(domain, palette),
+                        highlight: {
+                            background: '#374151',
+                            border: '#ffffff'
+                        }
+                    },
+                    font: { color: '#f3f4f6', size: 12 },
+                    borderWidth: 2,
+                    shape: 'box',
+                    ...(isolatedPosition ? {
+                        x: isolatedPosition.x,
+                        y: isolatedPosition.y,
+                        physics: false
+                    } : {})
+                };
+            });
+
+            const visEdges = currentEdges.map((edge, index) => ({
+                id: index,
+                from: edge.from,
+                to: edge.to,
+                dependencyLabel: edge.label || '',
+                arrows: 'to',
+                color: { color: 'rgba(75, 85, 99, 0.28)', highlight: '#3b82f6' },
+                width: 0.7,
+                hoverWidth: 1.5,
+                selectionWidth: 2,
+                title: edge.label || '',
+                smooth: { type: 'continuous', roundness: 0.15 }
+            }));
+
+            if (network) {
+                network.destroy();
             }
+
+            nodeData = new vis.DataSet(visNodes);
+            edgeData = new vis.DataSet(visEdges);
+            network = new vis.Network(document.getElementById('network'), { nodes: nodeData, edges: edgeData }, {
+                physics: {
+                    stabilization: {
+                        enabled: true,
+                        iterations: 250,
+                        updateInterval: 25
+                    },
+                    barnesHut: {
+                        gravitationalConstant: -12000,
+                        centralGravity: 0.15,
+                        springLength: 240,
+                        springConstant: 0.02,
+                        damping: 0.45,
+                        avoidOverlap: 0.25
+                    }
+                },
+                interaction: {
+                    hover: true,
+                    tooltipDelay: 200,
+                    dragNodes: true,
+                    dragView: true,
+                    zoomView: true,
+                    hideEdgesOnDrag: false
+                }
+            });
+
+            let layoutReady = false;
+            function finishLayout() {
+                if (layoutReady || !network) return;
+                layoutReady = true;
+                network.setOptions({ physics: false });
+                network.redraw();
+            }
+
+            network.fit({ animation: false });
+            network.once('stabilized', finishLayout);
+            setTimeout(finishLayout, 5000);
+            network.on('selectNode', (params) => showDependencyLabels(params.nodes[0]));
+            network.on('deselectNode', () => clearDependencyLabels());
+        }
+
+        searchInput.addEventListener('input', () => {
+            const query = searchInput.value.trim();
+            if (!query) {
+                resultsList.style.display = 'none';
+                return;
+            }
+            renderSearchResults(getSearchMatches(query));
         });
 
         document.addEventListener('click', (e) => {
@@ -745,61 +897,35 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
             }
         });
 
-        let currentSearchQuery = "";
-        let currentSearchMatches = [];
-        let currentSearchIndex = 0;
-
         function searchNode() {
-            const query = searchInput.value.toUpperCase().trim();
+            const query = searchInput.value.trim();
             if (!query) return;
             resultsList.style.display = 'none';
-
-            const queryWords = query.split(/\\s+/).filter(Boolean);
-            const exactQuery = queryWords.join('_');
-            const exactMatch = nodes.find(n => 
-                n.id.toUpperCase() === query || 
-                n.id.toUpperCase() === exactQuery || 
-                n.id.toUpperCase().replace('GITHUB_', '') === exactQuery
-            );
+            const normalizedQuery = normalizeSearchValue(query);
+            const exactMatch = currentNodes.find((node) => {
+                const exactCandidates = [
+                    normalizeSearchValue(node.id),
+                    normalizeSearchValue(getNodeLabel(node, currentGraphConfig)),
+                ];
+                return exactCandidates.includes(normalizedQuery);
+            });
             if (exactMatch) {
-                network.selectNodes([exactMatch.id]);
-                showDependencyLabels(exactMatch.id);
-                network.focus(exactMatch.id, {
-                    scale: 1.2,
-                    animation: {
-                        duration: 1000,
-                        easingFunction: 'easeInOutQuad'
-                    }
-                });
-                document.getElementById('stats').innerText = \`Nodes: \${nodes.length} | Edges: \${edges.length} | Focused: \${exactMatch.id}\`;
+                focusNode(exactMatch);
                 return;
             }
 
-            if (query !== currentSearchQuery) {
-                currentSearchQuery = query;
-                currentSearchMatches = nodes.filter(n => {
-                    const idUpper = n.id.toUpperCase();
-                    return queryWords.every(word => idUpper.includes(word));
-                });
+            if (normalizedQuery !== currentSearchQuery) {
+                currentSearchQuery = normalizedQuery;
+                currentSearchMatches = getSearchMatches(query);
                 currentSearchIndex = 0;
             }
-            
+
             if (currentSearchMatches.length > 0) {
                 const match = currentSearchMatches[currentSearchIndex];
-                network.selectNodes([match.id]);
-                showDependencyLabels(match.id);
-                network.focus(match.id, {
-                    scale: 1.2,
-                    animation: {
-                        duration: 1000,
-                        easingFunction: 'easeInOutQuad'
-                    }
-                });
-                
-                document.getElementById('stats').innerText = \`Nodes: \${nodes.length} | Edges: \${edges.length} | Match \${currentSearchIndex + 1} of \${currentSearchMatches.length}\`;
+                focusNode(match, \`Match \${currentSearchIndex + 1} of \${currentSearchMatches.length}\`);
                 currentSearchIndex = (currentSearchIndex + 1) % currentSearchMatches.length;
             } else {
-                document.getElementById('stats').innerText = \`Nodes: \${nodes.length} | Edges: \${edges.length} | No matches found\`;
+                updateStats('No matches found');
             }
         }
 
@@ -808,13 +934,42 @@ export function writeVisualizationHTML(nodes: Node[], edges: Edge[], path: strin
                 searchNode();
             }
         });
+
+        fileInput.addEventListener('change', async (event) => {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+
+            try {
+                const text = await file.text();
+                const parsed = JSON.parse(text);
+                const parsedConfig = parsed && Array.isArray(parsed.nodes) && Array.isArray(parsed.edges)
+                    ? parsed
+                    : parsed && parsed.graphConfig && Array.isArray(parsed.graphConfig.nodes) && Array.isArray(parsed.graphConfig.edges)
+                        ? parsed.graphConfig
+                        : null;
+
+                if (!parsedConfig) {
+                    throw new Error('Expected JSON with top-level nodes/edges or graphConfig.nodes/graphConfig.edges.');
+                }
+
+                renderGraph(parsedConfig);
+                updateStats(\`Loaded: \${file.name}\`);
+            } catch (error) {
+                const message = error && error.message ? error.message : 'Unable to load JSON graph file.';
+                updateStats(message);
+                console.error(error);
+            } finally {
+                event.target.value = '';
+            }
+        });
+
+        renderGraph(defaultGraphConfig);
     </script>
 </body>
 </html>`;
 
   const finalHtml = htmlTemplate
-    .replace("__NODES_JSON__", JSON.stringify(nodes))
-    .replace("__EDGES_JSON__", JSON.stringify(edges));
+    .replace("__GRAPH_CONFIG_JSON__", JSON.stringify(graphConfig));
 
   writeFileSync(path, finalHtml, "utf-8");
 }

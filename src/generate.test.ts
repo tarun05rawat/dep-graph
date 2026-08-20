@@ -233,7 +233,7 @@ describe("Tool Catalog Parser", () => {
   });
 
   test("writes visualization.html with correct nodes and edges embedded", () => {
-    const mockNodes = [{ id: "GITHUB_CREATE_AN_ISSUE" }];
+    const mockNodes = [{ id: "GITHUB_CREATE_AN_ISSUE", label: "Create Issue" }];
     const mockEdges = [{ from: "GITHUB_LIST_REPOSITORY_ISSUES", to: "GITHUB_CREATE_AN_ISSUE", label: "issue_number" }];
     const tempPath = "visualization_test.html";
 
@@ -247,8 +247,11 @@ describe("Tool Catalog Parser", () => {
     const content = readFileSync(tempPath, "utf-8");
     
     assert.ok(content.includes("vis-network.min.js"));
-    assert.ok(content.includes(JSON.stringify(mockNodes)));
-    assert.ok(content.includes(JSON.stringify(mockEdges)));
+    assert.ok(content.includes('"nodes":' + JSON.stringify(mockNodes)));
+    assert.ok(content.includes('"edges":' + JSON.stringify(mockEdges)));
+    assert.ok(content.includes("const defaultGraphConfig ="));
+    assert.ok(content.includes("renderGraph(defaultGraphConfig);"));
+    assert.ok(content.includes('id="graph-file-input"'));
 
     unlinkSync(tempPath);
   });
